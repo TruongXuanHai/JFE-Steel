@@ -142,7 +142,7 @@ Public Class frmMain
 #Region "イベント_ボタン押下_「停止」ボタン"
     Private Sub btnStop_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles btnStop.Click
         'サーバ側との接続を切断する
-        gobjClsTcpClient.mTcpClose()
+        'gobjClsTcpClient.mTcpClose()
         'コントロール有効化
         subControl(True)
         StopAllThreads()
@@ -1050,21 +1050,17 @@ Public Class frmMain
         Dim intBuf As Integer
         Dim intCnt As Integer
         Dim intRegNum As Integer
-
         Dim gwIndex1 As Integer = gwIndex
         Dim unitIndex1 As Integer = unitIndex
         Dim channelIndex1 As Integer = channelIndex
-
         '共通処理_転送ID
         gbytSndData(0) = (gsttModbus.intModTransId And &HFF00) >> 8
         gbytSndData(1) = gsttModbus.intModTransId And &HFF
         '共通処理_プロトコルID
         gbytSndData(2) = (gsttModbus.intModProtId And &HFF00) >> 8
         gbytSndData(3) = gsttModbus.intModProtId And &HFF
-
         Dim intLenBuf As Integer
         intLenBuf = 0
-
         '転送バイト数を算出するために「ユニットID」から場合分けを行う
         Select Case (gsttModbus.intModFunc)
             Case &H17   'Write/Read Registers
@@ -1086,7 +1082,6 @@ Public Class frmMain
                 intLenBuf += 1
                 gbytSndData(6 + intLenBuf) = intBuf And &HFF
                 intLenBuf += 1
-
                 '書き込む開始アドレス
                 intBuf = gsttModbus.intModWriteAddr
                 gbytSndData(6 + intLenBuf) = (intBuf And &HFF00) >> 8
@@ -1130,18 +1125,13 @@ Public Class frmMain
                     '書き込むデータ
                     intLenBuf = funcGetSndTimeData(intLenBuf, gwIndex1, unitIndex1, channelIndex1)
                 End If
-
                 '転送バイト数
                 gbytSndData(4) = (intLenBuf And &HFF00) >> 8
                 gbytSndData(5) = intLenBuf And &HFF
-
                 intDataLen = 6 + intLenBuf
-
             Case Else
                 intDataLen = 0
-
         End Select
-
         Return intDataLen
     End Function
 #End Region
@@ -1329,7 +1319,6 @@ Public Class frmMain
         End If
     End Sub
 #End Region
-
 #End Region
 
 
@@ -1345,7 +1334,6 @@ Public Class frmMain
         Dim folders As String() = {"datalog", partInPath(1), partInPath(2), partInPath(3), partInPath(4)}
         Dim remotePath As String = serverUriTemp & "datalog/" & partInPath(1) & "/" & partInPath(2) & "/" & partInPath(3) & "/" & partInPath(4) & "/" & remoteFileName
         Dim currentPath As String = ""
-
         For Each folder In folders
             currentPath &= "/" & folder
             Dim fullUri As String = serverUriTemp.TrimEnd("/"c) & currentPath
@@ -1365,7 +1353,6 @@ Public Class frmMain
                 End If
             End Try
         Next
-
         Try
             Dim request As FtpWebRequest = DirectCast(WebRequest.Create(remotePath), FtpWebRequest)
             request.Method = WebRequestMethods.Ftp.UploadFile
@@ -1390,61 +1377,21 @@ Public Class frmMain
 
     Private Sub StartMultipleThreads()
         Dim GWNumber As Integer = GetSettingParameter(xmlFilePath, 0, 0, 0).GateWayNumber
-        Dim threadList As New List(Of Thread)()
-        Dim paraList As New List(Of clsThreadPara)()
-
+        'CancellationTokenSourceを初期
+        cancellationTokenSource = New CancellationTokenSource()
+        '各変数（i）→1のGW
         For i As Integer = 1 To GWNumber
             Dim tempIndex As Integer = i
-            Dim paramsThread As New clsThreadPara(tempIndex, 1, 1)
+            Dim paramsThread As New clsThreadPara(tempIndex, 1, 1, cancellationTokenSource.Token)
             Dim thread As New Thread(Sub() TaskProcessing(paramsThread))
             thread.Start()
-            'Dim paramsThread As New clsThreadPara(tempIndex, 1, 1)
-            'paraList.Add(paramsThread)
-            'Dim newThread As New Thread(Sub() TaskProcessing(paraList(tempIndex - 1)))
-            'threadList.Add(newThread)
         Next
-
-        'For Each t As Thread In threadList
-        '    t.Start()
-        'Next
-
-        'Dim paramsThread1 As New clsThreadPara(1, 1, 1)
-        'Dim thread1 As New Thread(Sub() TaskProcessing(paramsThread1))
-        'thread1.Start()
-
-        'Dim paramsThread2 As New clsThreadPara(2, 1, 1)
-        'Dim thread2 As New Thread(Sub() TaskProcessing(paramsThread2))
-        'thread2.Start()
-
-        'Dim GWNumber As Integer = GetSettingParameter(xmlFilePath, 0, 0, 0).GateWayNumber
-
-        '' Khởi tạo CancellationTokenSource mới
-        'cancellationTokenSource = New CancellationTokenSource()
-
-        '' Đảm bảo danh sách thread được xóa trước khi thêm mới
-        ''threads.Clear()
-
-        'For i As Integer = 1 To GWNumber
-        '    'Dim paramsThread As New clsThreadPara(i, 1, 1, cancellationTokenSource.Token)
-        '    Dim paramsThread As New clsThreadPara(i, 1, 1)
-        '    Dim thread As New Thread(Sub() TaskProcessing(paramsThread))
-        '    thread.Start()
-        'Next
-
     End Sub
 
-    'Private Sub StopAllThreads()
-    '    For Each t As Thread In threads
-    '        If t.IsAlive Then
-    '            t.Interrupt() ' Hoặc sử dụng một phương pháp khác tùy thuộc vào cách bạn xử lý trong TaskProcessing
-    '        End If
-    '    Next
-    'End Sub
-
     Private Sub StopAllThreads()
-        'If cancellationTokenSource IsNot Nothing Then
-        '    cancellationTokenSource.Cancel()
-        'End If
+        If cancellationTokenSource IsNot Nothing Then
+            cancellationTokenSource.Cancel()
+        End If
     End Sub
 
 
@@ -1453,11 +1400,14 @@ Public Class frmMain
         Dim GWIndex As Integer = currentValues._gwIndex
         Dim UNITIndex As Integer = currentValues._unitIndex
         Dim CHANNELIndex As Integer = currentValues._channelIndex
-        'Dim GWNumber As Integer = GetSettingParameter(xmlFilePath, GWIndex, UNITIndex, CHANNELIndex).GateWayNumber
         Dim UNITNumber As Integer = GetSettingParameter(xmlFilePath, GWIndex, UNITIndex, CHANNELIndex).UnitNumber
-
+        'GW中の各ユニット処理
         While UNITIndex <= UNITNumber
-
+            'スレッド停止の要求を確認 (True→中断)
+            If params.CancellationToken.IsCancellationRequested Then
+                gobjClsTcpClient.mTcpClose()
+                Exit Sub
+            End If
             Dim blnRslt As Boolean
             '入力値のチェック
             blnRslt = funcChkUserData(GWIndex, UNITIndex, CHANNELIndex)
@@ -1512,28 +1462,11 @@ Public Class frmMain
                     frmDebug.lblMessageCommunication.Text = MES_SND_ERR_1
                 End If
             End If
-
-            '    If UNITIndex <= UNITNumber Then
-            '        Task.Delay(1000).Wait() ' Tạo độ trễ 1 giây
-            '        UNITIndex = UNITIndex + 1
-            '        params.Update(GWIndex, UNITIndex, CHANNELIndex)
-
-            '    Else
-            '        UNITIndex = 1
-            '        Task.Delay(1000).Wait()
-            '        params.Update(GWIndex, UNITIndex, CHANNELIndex)
-            '    End If
-
-            'Else
-
-            '    UNITIndex = 1
-
-            '    Task.Delay(1000).Wait()
-
-            '    params.Update(GWIndex, UNITIndex, CHANNELIndex)
+            '最初のユニットに戻る
             If UNITIndex = UNITNumber Then
                 UNITIndex = 1
             Else
+                '次のユニットをプロセスする
                 UNITIndex = UNITIndex + 1
             End If
             params.Update(GWIndex, UNITIndex, CHANNELIndex)
