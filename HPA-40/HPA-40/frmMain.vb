@@ -28,12 +28,9 @@ Public Class frmMain
 
 #Region "構造体"
 #Region "構造体_ソケット通信設定値"
-    Private Structure sttSocket
-        Dim strSktIpAddr As String      'IPアドレス
-        Dim intSktPort As Integer       'ポート番号
-        Dim intSktIntval As Integer     '送信間隔
-        Dim intSktTimeout As Integer    'タイムアウト
-    End Structure
+    Dim intSktPort As Integer = 502      'ポート番号
+    Dim intSktIntval As Integer = 200    '送信間隔
+    Dim intSktTimeout As Integer = 100   'タイムアウト
 #End Region
 #Region "構造体_Modbus設定値"
     Private Structure sttModbus
@@ -64,21 +61,24 @@ Public Class frmMain
 #Region "ディレクトリ"
     Dim basePath As String = funcGetAppPath() & "\Hakaru\"
     Dim basePath1 As String = funcGetAppPath() & "\Hakaru\ErrLog\"
+    Dim csvfilePath1 As String = basePath1.ToString() & "errlog" & ".csv"
     Dim xmlFilePath As String = funcGetAppPath() & "\" & UNITSETTING_XML_NAME & ".xml"
     Dim xmlFilePath1 As String = funcGetAppPath() & "\" & FTPSETTING_XML_NAME & ".xml"
+    Dim csvfileLogPathList As New List(Of String)
 #End Region
 
 #Region "定数"
     Private Const APP_NAME_1 As String = "HPA-40"
     Private Const UNITSETTING_XML_NAME As String = "Unitsetting"
     Private Const FTPSETTING_XML_NAME As String = "FTPsetting"
+    Private Const MAINLOG_TXT_NAME As String = "MainErr"
     Private Const APP_NAME_2 As String = "JFEスチール向けエッジサーバ転送"
     Private Const VER_NUM As String = "Ver.1.00"
     Private Const TITLE As String = APP_NAME_2 & " (" & APP_NAME_1 & ")" & " " & VER_NUM
     Private Const MES_RCV_OK_1 As String = "受信OK"
     Private Const MES_RCV_ERR_1 As String = "受信エラー：受信できません"
     Private MES_RCV_ERR_2 As String = ""
-    Private Const MES_SND_ERR_1 As String = "送信エラー：TCP接続ができません"
+    Private Const MES_SND_ERR_1 As String = "TCP接続ができません"
     Private Const MES_SND_ERR_2 As String = "送信エラー：送信できません"
     Private Const MES_CHK_ERR As String = "レジスタ数エラーチェック中"
     Private Const REGI_ONE_MAX As Integer = 125
@@ -88,7 +88,6 @@ Public Class frmMain
 
 #Region "変数"
     Private gobjClsTcpClient As New clsTcpClient   'clsTcpClientクラス
-    Private gsttSocket As sttSocket
     Private gsttModbus As sttModbus
     Private gsttWriteData As sttWriteData
     Private gintCntTmr1Tick As Integer             'tmrTimer1のTickが起こった回数
@@ -121,6 +120,48 @@ Public Class frmMain
         subFormInit()
         'コントロール初期化
         subControl(True)
+        'Hakaruフォルダを作成
+        Try
+            If Not Directory.Exists(basePath) Then
+                Directory.CreateDirectory(basePath)
+            End If
+        Catch ex As Exception
+            Console.WriteLine("エラー: " & ex.Message)
+        End Try
+        'ErrLogフォルダを作成 (Hakaru/ErrLog)
+        Try
+            If Not Directory.Exists(basePath1) Then
+                Directory.CreateDirectory(basePath1)
+            End If
+        Catch ex As Exception
+            Console.WriteLine("エラー: " & ex.Message)
+        End Try
+        'Errlog.csvファイルを作成 (Hakaru/ErrLog/errlog.csv) →各GWは別のログCSVファイルが有る
+        'GW1 →　Errlog1.csv
+        'GW2 →　Errlog2.csv
+        Dim GWNumber As Integer = GetSettingParameter(xmlFilePath, 0, 0, 0).GateWayNumber
+        For i As Integer = 1 To GWNumber
+            Dim csvfileLogPath As String = basePath1.ToString() & "Errlog_" & i & ".csv"
+            csvfileLogPathList.Add(csvfileLogPath)
+        Next
+        Try
+            For i As Integer = 1 To GWNumber
+                If Not Directory.Exists(csvfileLogPathList(i - 1)) Then
+                    Dim utf8Bom As Byte() = New Byte() {&HEF, &HBB, &HBF}
+                    File.WriteAllBytes(csvfileLogPathList(i - 1), utf8Bom)
+                    Dim headerErr As String = "TIMESTAMP,CONTENT"
+                    Try
+                        Using writer As StreamWriter = New StreamWriter(csvfileLogPathList(i - 1), append:=False)
+                            writer.WriteLine(headerErr)
+                        End Using
+                    Catch ex As Exception
+                        Console.WriteLine("エラー: " & ex.Message)
+                    End Try
+                End If
+            Next
+        Catch ex As Exception
+            Console.WriteLine("エラー: " & ex.Message)
+        End Try
     End Sub
 #End Region
 
@@ -136,6 +177,7 @@ Public Class frmMain
     Private Sub btnStart_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles btnStart.Click
         'コントロール無効化
         subControl(False)
+        '各スレッドを開始
         StartMultipleThreads()
     End Sub
 #End Region
@@ -273,7 +315,7 @@ Public Class frmMain
             Using writer As StreamWriter = New StreamWriter(csvFilePathTemp, True)
                 writer.WriteLine(dataLine)
             End Using
-            'UploadFileToFtp(serverUri, userName, password, csvFilePathTemp, remoteDirectory)
+            UploadFileToFtp(serverUri, userName, password, csvFilePathTemp, remoteDirectory)
         End If
     End Sub
 #End Region
@@ -644,13 +686,6 @@ Public Class frmMain
         Dim unitIndex1 As String = unitIndex
         Dim channelIndex1 As String = channelIndex
 
-        gsttSocket.strSktIpAddr = GetSettingParameter(xmlFilePath, gwIndex1, unitIndex1, channelIndex1).IPAddress
-        'テキストボックス_ポート番号
-        gsttSocket.intSktPort = 502
-        'テキストボックス_送信間隔
-        gsttSocket.intSktIntval = 200
-        'テキストボックス_タイムアウト
-        gsttSocket.intSktTimeout = 100
         'テキストボックス_転送ID
         gsttModbus.intModTransId = CInt("&H" & "0000")
         'テキストボックス_プロトコルID
@@ -682,6 +717,10 @@ Public Class frmMain
         Dim gwIndex1 As Integer = gwIndex
         Dim unitIndex1 As Integer = unitIndex
         Dim channelIndex1 As Integer = channelIndex
+        Dim IPAddress As String = GetSettingParameter(xmlFilePath, gwIndex1, unitIndex1, channelIndex1).IPAddress
+        Dim Port As Integer = 502
+        Dim Timeout As String = 100
+        Dim Interval As String = 200
         Console.WriteLine("gwIndex la " & gwIndex1)
         Console.WriteLine("unitIndex la " & unitIndex1)
         Console.WriteLine("channelIndex la " & channelIndex1)
@@ -711,10 +750,6 @@ Public Class frmMain
         For intCnt = 0 To (intSndDataLen - 1)
             strSend = strSend & "[" & gbytSndData(intCnt).ToString("X2") & "h] "
         Next
-        '最後に改行を追加する
-        'frmDebug.txtTransmit.AppendText(strSend & vbCrLf)
-
-        'UpdateLabel(strSend)
         'データを送信する
         blnRslt = gobjClsTcpClient.mTcpSend(gbytSndData, intSndDataLen)
         '送信処理が正常に行えなかったときは、終了処理を行う
@@ -726,29 +761,22 @@ Public Class frmMain
         gintComNowCnt += 1
         '受信確認用タイマスタート
         gintCntTmr1Tick = 0
-        'tmrTimer1.Start()
         '受信処理
         blnRslt = gobjClsTcpClient.mTcpRcv
         'Dim blnRslt As Boolean
         Dim intRcvStat As Integer
-        'タイマストップ
-        'tmrTimer1.Stop()
         'Tickが起こった回数をカウントアップ
         gintCntTmr1Tick += 1
-
         '受信処理
         blnRslt = gobjClsTcpClient.mTcpRcv
         '受信状態フラグ確認
         intRcvStat = gobjClsTcpClient.pRcvStat
         If intRcvStat = RcvStat.RCV_END Then
-
             Dim dtmNow As DateTime
             dtmNow = DateTime.Now
-
             '受信完了
             'Tickが起こった回数を初期化する
             gintCntTmr1Tick = 0
-
             '受信データを取得する
             Dim bytRcvData() As Byte
             bytRcvData = gobjClsTcpClient.pRcvData
@@ -762,7 +790,6 @@ Public Class frmMain
             For intCnt = 0 To (bytRcvData.Length - 1)
                 strRcv1 = strRcv1 & bytRcvData(intCnt).ToString("X2")
             Next
-
             Dim data As String = strRcv1
             '最初にシステム時間を追加する
             frmDebug.txtReceive.AppendText((dtmNow.ToString("yyyy/MM/dd HH:mm:ss")))
@@ -772,18 +799,15 @@ Public Class frmMain
             Dim channelNumber As Integer = GetSettingParameter(xmlFilePath, gwIndex1, unitIndex1, channelIndex1).ChannelNumber
             'データラインを作成
             Dim dataLine As String = CreateDataLine(channelNumber, dtmNow, dataFilter)
-
             '処理されているユニットの情報を取得
             Dim gatewayNo As String = GetSettingParameter(xmlFilePath, gwIndex1, unitIndex1, channelIndex1).GateWayNo
             Dim unitNo As String = GetSettingParameter(xmlFilePath, gwIndex1, unitIndex1, channelIndex1).UnitNo
             Dim unitName As String = GetSettingParameter(xmlFilePath, gwIndex1, unitIndex1, channelIndex1).UnitName
-
             '現在の時刻情報を取得
             Dim currentDate As DateTime = DateTime.Now
             Dim currentYear As String = currentDate.Year.ToString("0000")
             Dim currentMonth As String = currentDate.Month.ToString("00")
             Dim currentDay As String = currentDate.Day.ToString("00")
-
             'CSVファイルのディレクトリ構造を作成
             Dim csvfilePath As String = basePath.ToString() & gatewayNo & "\" & unitNo & "\" & currentYear & "\" & currentMonth & "\" & unitName & "_" & currentYear & currentMonth & currentDay & ".csv"
             'CSVファイルのヘッダーを初期
@@ -808,43 +832,25 @@ Public Class frmMain
                 Using sw As New StreamWriter(csvfilePath, False, New UTF8Encoding(True))
                     'CSVにヘッダーを書く
                     sw.WriteLine(header)
-                    'UploadFileToFtp(serverUri, userName, password, csvfilePath, remoteDirectory)
+                    UploadFileToFtp(serverUri, userName, password, csvfilePath, remoteDirectory)
                 End Using
             Else
                 'CSVファイルが存在している場合、そのCSVファイルを引き続き書き込む
                 CheckAndWriteCSV(csvfilePath, dataLine)
-
             End If
-
-            'If Not File.Exists(csvfilePath1) Then
-            '    Dim directoryPath As String = Path.GetDirectoryName(csvfilePath1)
-            '    If Not Directory.Exists(directoryPath) Then
-            '        Directory.CreateDirectory(directoryPath)
-            '    End If
-
-            'Else
-            '    'CSVファイルが存在している場合、そのCSVファイルを引き続き書き込む
-            '    CheckAndWriteCSV(csvfilePath1, dataLine)
-            'End If
-
-
             'chkLongRegにチェックが入っていない時は受信データの正誤チェックを行う
-
             If gLongReg = False Then
                 '受信データチェック
                 blnRslt = funcChkRcvData(bytRcvData)
                 If blnRslt = False Then
                     '受信エラー処理
                     SubProcRcvErr()
-
                     Dim intCnt As String = bytRcvData.Length - 1
                     MES_RCV_ERR_2 = "エラーコード" + bytRcvData(intCnt).ToString("X2") & "H" + " :受信できません"
-
                     '受信エラー→メッセージを表示する
                     frmDebug.lblMessageCommunication.Text = MES_RCV_ERR_2
                     Exit Function
                 End If
-
                 '読み出しコマンドの場合のみ、受信データを[Read]タブに表示する
                 If gsttModbus.intModFunc = &H17 Then
                     '---受信データを[Read]タブに書込む---
@@ -858,15 +864,12 @@ Public Class frmMain
                     Next
                     '---受信データを[Read]タブに書込む---
                 End If
-
                 '受信OK→メッセージを表示する
-
                 frmDebug.lblMessageCommunication.Text = MES_RCV_OK_1
             Else
                 'chkLongRegにチェックが入っているときはメッセージを表示するする
                 frmDebug.lblMessageCommunication.Text = MES_CHK_ERR
             End If
-
             'データを分けて送受信する場合は、送信間隔に関わらず送信する
             If gintComNowCnt < gintComMaxCnt Then
                 'データ送信処理
@@ -877,11 +880,9 @@ Public Class frmMain
                     frmDebug.lblMessageCommunication.Text = MES_SND_ERR_1
                 End If
                 'chkLoopにチェックが入っていれば、送信間隔管理用タイマスタートする
-
                 If ginitLoop = True Then
                     '送信間隔管理用タイマスタート
                     gintCntTmr2Tick = 0
-                    'tmrTimer2.Start()
                 End If
             Else
                 'chkLoopにチェックが入っていなければ、停止処理を行う
@@ -890,24 +891,20 @@ Public Class frmMain
                     gobjClsTcpClient.mTcpClose()
                 End If
             End If
-
         ElseIf intRcvStat = RcvStat.RCV_MID Then
             '受信中
-            If gintCntTmr1Tick >= (gsttSocket.intSktTimeout \ tmrTimer1.Interval) Then
+            If gintCntTmr1Tick >= (intSktTimeout \ Interval) Then
                 'タイムアウトした
                 'Tickが起こった回数を初期化する
                 gintCntTmr1Tick = 0
-
                 '受信エラー処理
                 SubProcRcvErr()
                 '受信エラー→メッセージを表示する
                 frmDebug.lblMessageCommunication.Text = MES_RCV_ERR_1
             Else
                 'タイムアウトがまだ→タイマスタート
-                'tmrTimer1.Start()
                 funcSndData1(gwIndex1, unitIndex1, channelIndex1)
             End If
-
         ElseIf intRcvStat = RcvStat.RCV_ERR Then
             '受信エラー
             'Tickが起こった回数を初期化する
@@ -936,7 +933,6 @@ Public Class frmMain
         Dim intBuf As Integer
         Dim intCnt As Integer
         Dim intRegNum As Integer
-
         Dim gwIndex1 As Integer = gwIndex
         Dim unitIndex1 As Integer = unitIndex
         Dim channelIndex1 As Integer = channelIndex
@@ -946,13 +942,10 @@ Public Class frmMain
         '共通処理_プロトコルID
         gbytSndData(2) = (gsttModbus.intModProtId And &HFF00) >> 8
         gbytSndData(3) = gsttModbus.intModProtId And &HFF
-
         Dim intLenBuf As Integer
         intLenBuf = 0
-
         '転送バイト数を算出するために「ユニットID」から場合分けを行う
         Select Case (gsttModbus.intModFunc)
-
             Case &H17   'Write/Read Registers
                 '共通処理_ユニットID
                 gbytSndData(6 + intLenBuf) = gsttModbus.intModUnitId
@@ -976,7 +969,6 @@ Public Class frmMain
                 intLenBuf += 1
                 gbytSndData(6 + intLenBuf) = intBuf And &HFF
                 intLenBuf += 1
-
                 '書き込む開始アドレス
                 intBuf = gsttModbus.intModWriteAddr
                 gbytSndData(6 + intLenBuf) = (intBuf And &HFF00) >> 8
@@ -986,11 +978,9 @@ Public Class frmMain
                 '以下はchkTimeWriteにチェックが入っていない時はWriteタブのデータを書き込む、入っているときはStep2で指定した時刻等を書き込む
                 If gTimeWrite = False Then
                     'chkTimeWriteにチェックが入っていない時はWriteタブのデータを書き込む
-
                     If gsttModbus.intModWriteRegist > 125 Then
                         gintComNowCnt_w += 1
                     End If
-
                     'レジスタ数
                     If gsttModbus.intModWriteRegist > ((gintComNowCnt_w + 1) * REGI_ONE_MAX) Then
                         intBuf = REGI_ONE_MAX
@@ -1029,16 +1019,15 @@ Public Class frmMain
                     '書き込むデータ
                     intLenBuf = funcGetSndTimeData(intLenBuf, gwIndex1, unitIndex1, channelIndex1)
                 End If
-
                 '転送バイト数
                 gbytSndData(4) = (intLenBuf And &HFF00) >> 8
                 gbytSndData(5) = intLenBuf And &HFF
-
                 intDataLen = 6 + intLenBuf
         End Select
         Return intDataLen
     End Function
 #End Region
+
 #Region "関数_送信データ生成_レジスタ数が126以上で指定されていてもそのままの値で1回のみ送信する"
     '送信データ生成_レジスタ数が126以上で指定されていてもそのままの値で1回のみ送信する
     'Parameters:
@@ -1136,6 +1125,7 @@ Public Class frmMain
     End Function
 #End Region
 #End Region
+
 #Region "関数_送信データ時間データ生成"
     '送信データ時間データ生成
     'Parameters:
@@ -1195,10 +1185,10 @@ Public Class frmMain
         intLenBuf += 1
         gbytSndData(6 + intLenBuf) = intBuf And &HFF
         intLenBuf += 1
-
         Return intLenBuf
     End Function
 #End Region
+
 #Region "関数_受信データチェック"
     '受信データチェック
     'Parameters:
@@ -1210,7 +1200,6 @@ Public Class frmMain
         Dim intBuf As Integer
         Dim intRegNum As Integer
         Dim intAddrNum As Integer
-
         '転送IDチェック
         intBuf = (CInt(bytRcvData(0)) << 8)
         intBuf = intBuf + bytRcvData(1)
@@ -1218,7 +1207,6 @@ Public Class frmMain
             Return blnRslt
             Exit Function
         End If
-
         'プロトコルIDチェック
         intBuf = (CInt(bytRcvData(2)) << 8)
         intBuf = intBuf + bytRcvData(3)
@@ -1226,7 +1214,6 @@ Public Class frmMain
             Return blnRslt
             Exit Function
         End If
-
         '転送バイト数チェック
         intBuf = (CInt(bytRcvData(4)) << 8)
         intBuf = intBuf + bytRcvData(5)
@@ -1234,21 +1221,18 @@ Public Class frmMain
             Return blnRslt
             Exit Function
         End If
-
         'ユニットIDチェック
         intBuf = bytRcvData(6)
         If intBuf <> gsttModbus.intModUnitId Then
             Return blnRslt
             Exit Function
         End If
-
         'ファンクションコードチェック
         intBuf = bytRcvData(7)
         If intBuf <> gsttModbus.intModFunc Then
             Return blnRslt
             Exit Function
         End If
-
         '以下はファンクションによって異なる
         If (gsttModbus.intModFunc = &H3) OrElse (gsttModbus.intModFunc = &H4) OrElse (gsttModbus.intModFunc = &H17) Then
             '読み出しコマンドの場合は受信データの「バイト数」の項目が、要求したレジスタ数の2倍であることを確認する
@@ -1258,7 +1242,6 @@ Public Class frmMain
             Else
                 intRegNum = gsttModbus.intModReadRegist - ((gintComNowCnt - 1) * REGI_ONE_MAX)
             End If
-
             If intBuf <> (intRegNum * 2) Then
                 Return blnRslt
                 Exit Function
@@ -1295,11 +1278,11 @@ Public Class frmMain
                 Exit Function
             End If
         End If
-
         blnRslt = True
         Return blnRslt
     End Function
 #End Region
+
 #Region "関数_受信エラー処理"
     '受信エラー処理
     'Parameters:
@@ -1311,7 +1294,6 @@ Public Class frmMain
         gintComNowCnt = 0
         '全てのデータを得る際の現在の送信回数を初期化する
         gintComNowCnt_w = 0
-
         'chkLoopにチェックが入っていなければ、停止処理を行う
         If ginitLoop = False Then
             'サーバ側との接続を切断する
@@ -1321,7 +1303,7 @@ Public Class frmMain
 #End Region
 #End Region
 
-
+#Region "FTPでCSVファイルを転送"
     Private Sub UploadFileToFtp(ByVal serverUriTemp As String, ByVal userNameTemp As String, ByVal passwordTemp As String, ByVal localFilePath As String, ByVal remoteDirectory As String)
         Dim localFilePathTemp As String = localFilePath
         Dim remoteFileName = Path.GetFileName(localFilePathTemp)
@@ -1365,16 +1347,13 @@ Public Class frmMain
             Using response As FtpWebResponse = DirectCast(request.GetResponse(), FtpWebResponse)
                 Console.WriteLine("Upload successful")
             End Using
-
         Catch ex As Exception
             Console.WriteLine("Error occurred: " & ex.Message)
         End Try
     End Sub
+#End Region
 
-    Private Sub btnDebug_Click(sender As Object, e As EventArgs) Handles btnDebug.Click
-        frmDebug.Show()
-    End Sub
-
+#Region "マルチスレッドを開始"
     Private Sub StartMultipleThreads()
         Dim GWNumber As Integer = GetSettingParameter(xmlFilePath, 0, 0, 0).GateWayNumber
         'CancellationTokenSourceを初期
@@ -1387,20 +1366,27 @@ Public Class frmMain
             thread.Start()
         Next
     End Sub
+#End Region
 
+#Region "マルチスレッドを停止"
     Private Sub StopAllThreads()
         If cancellationTokenSource IsNot Nothing Then
             cancellationTokenSource.Cancel()
         End If
     End Sub
+#End Region
 
-
+#Region "タスクを実行"
     Private Sub TaskProcessing(params As clsThreadPara)
         Dim currentValues As clsThreadPara = params.GetValues()
         Dim GWIndex As Integer = currentValues._gwIndex
         Dim UNITIndex As Integer = currentValues._unitIndex
         Dim CHANNELIndex As Integer = currentValues._channelIndex
         Dim UNITNumber As Integer = GetSettingParameter(xmlFilePath, GWIndex, UNITIndex, CHANNELIndex).UnitNumber
+        Dim IPADDRESS As String = GetSettingParameter(xmlFilePath, GWIndex, UNITIndex, CHANNELIndex).IPAddress
+
+        Dim dtmNow As DateTime
+        dtmNow = DateTime.Now
         'GW中の各ユニット処理
         While UNITIndex <= UNITNumber
             'スレッド停止の要求を確認 (True→中断)
@@ -1428,11 +1414,12 @@ Public Class frmMain
             '全てのデータを得る際の現在の送信回数を初期化する
             gintComNowCnt_w = 0
             'TCP接続を行う
-            blnRslt = gobjClsTcpClient.mTcpConnect(gsttSocket.strSktIpAddr, gsttSocket.intSktPort, gsttSocket.intSktTimeout)
+            blnRslt = gobjClsTcpClient.mTcpConnect(IPADDRESS, intSktPort, intSktTimeout)
             'TCP接続ができなかったときは、終了処理を行う
             If blnRslt = False Then
-                'メッセージを表示する
-                frmDebug.lblMessageCommunication.Text = MES_SND_ERR_1
+                '「TCP接続が出来ません」エラーを記録する
+                Dim dataErrLine = dtmNow.ToString("yyyy/MM/dd") & " " & dtmNow.ToString("HH:mm:ss") & "," & MES_SND_ERR_1
+                CheckAndWriteCSV(csvfileLogPathList(GWIndex - 1), dataErrLine)
                 Exit Sub
             End If
             'データ送信処理
@@ -1443,7 +1430,6 @@ Public Class frmMain
                 'メッセージを表示する
                 frmDebug.lblMessageCommunication.Text = MES_SND_ERR_1
                 'chkLoopにチェックが入っていなければ、停止処理を行う
-
                 If ginitLoop = False Then
                     'チェックが入っていなければ、停止処理を行う
                     'サーバ側との接続を切断する
@@ -1473,5 +1459,6 @@ Public Class frmMain
             Task.Delay(2000).Wait()
         End While
     End Sub
+#End Region
 End Class
 
