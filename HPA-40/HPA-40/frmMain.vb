@@ -79,8 +79,6 @@ Public Class frmMain
     Private Const MES_RCV_ERR_1 As String = "受信エラー：受信できません"
     Private MES_RCV_ERR_2 As String = ""
     Private Const MES_SND_ERR_1 As String = "TCP接続ができません"
-    Private Const MES_SND_ERR_2 As String = "送信エラー：送信できません"
-    Private Const MES_CHK_ERR As String = "レジスタ数エラーチェック中"
     Private Const REGI_ONE_MAX As Integer = 125
     Private Const REGI_ALL_MAX As Integer = REGI_ONE_MAX * 2
     Private Const TIME_WRITE_DATA_NUM As Integer = 8   'Modbus書込みデータのデータ数
@@ -111,6 +109,8 @@ Public Class frmMain
     Private password As String = GetServerParameter(xmlFilePath1).PassWord
     Private remoteDirectory As String = GetServerParameter(xmlFilePath1).RemoteDirectory
 #End Region
+
+    Dim dataErrLine As String
 
 #Region "イベント_起動"
     Private Sub frmMain_Load(ByVal sender As Object, ByVal e As System.EventArgs) Handles Me.Load
@@ -147,11 +147,9 @@ Public Class frmMain
         Try
             For i As Integer = 1 To GWNumber
                 If Not Directory.Exists(csvfileLogPathList(i - 1)) Then
-                    Dim utf8Bom As Byte() = New Byte() {&HEF, &HBB, &HBF}
-                    File.WriteAllBytes(csvfileLogPathList(i - 1), utf8Bom)
-                    Dim headerErr As String = "TIMESTAMP,CONTENT"
+                    Dim headerErr As String = "日付,時刻,内容"
                     Try
-                        Using writer As StreamWriter = New StreamWriter(csvfileLogPathList(i - 1), append:=False)
+                        Using writer As StreamWriter = New StreamWriter(csvfileLogPathList(i - 1), False, New UTF8Encoding(True))
                             writer.WriteLine(headerErr)
                         End Using
                     Catch ex As Exception
@@ -193,99 +191,100 @@ Public Class frmMain
 #End Region
 
 #Region "チャンネル数をチェックし、データラインを作成"
-    Private Function CreateDataLine(ByVal channelNumber As String, ByVal dtmNow As DateTime, ByVal dataFilter As String)
-        Dim dataLine As String = ""
-        Select Case channelNumber
-            Case 1  '1 Channel
-                Dim revertData1 As String = dataFilter.Substring(0, 16)
-                Dim decChannel1 As Single = Convert.ToInt32(revertData1, 16) * 0.0001
-                dataLine = dtmNow.ToString("yyyy/MM/dd") & ", " & dtmNow.ToString("HH:mm:00") & ", " & decChannel1
-            Case 2  '2 Channel
-                Dim revertData1 As String = dataFilter.Substring(0, 16)
-                Dim decChannel1 As Single = Convert.ToInt32(revertData1, 16) * 0.0001
-                Dim revertData2 As String = dataFilter.Substring(36, 16)
-                Dim decChannel2 As Single = Convert.ToInt32(revertData2, 16) * 0.0001
-                dataLine = dtmNow.ToString("yyyy/MM/dd") & ", " & dtmNow.ToString("HH:mm:00") & ", " & decChannel1 & ", " & decChannel2
-            Case 3  '3 Channel
-                Dim revertData1 As String = dataFilter.Substring(0, 16)
-                Dim decChannel1 As Single = Convert.ToInt32(revertData1, 16) * 0.0001
-                Dim revertData2 As String = dataFilter.Substring(36, 16)
-                Dim decChannel2 As Single = Convert.ToInt32(revertData2, 16) * 0.0001
-                Dim revertData3 As String = dataFilter.Substring(72, 16)
-                Dim decChannel3 As Single = Convert.ToInt32(revertData3, 16) * 0.0001
-                dataLine = dtmNow.ToString("yyyy/MM/dd") & ", " & dtmNow.ToString("HH:mm:00") & ", " & decChannel1 & ", " & decChannel2 & ", " & decChannel3
-            Case 4  '4 Channel
-                Dim revertData1 As String = dataFilter.Substring(0, 16)
-                Dim decChannel1 As Single = Convert.ToInt32(revertData1, 16) * 0.0001
-                Dim revertData2 As String = dataFilter.Substring(36, 16)
-                Dim decChannel2 As Single = Convert.ToInt32(revertData2, 16) * 0.0001
-                Dim revertData3 As String = dataFilter.Substring(72, 16)
-                Dim decChannel3 As Single = Convert.ToInt32(revertData3, 16) * 0.0001
-                Dim revertData4 As String = dataFilter.Substring(108, 16)
-                Dim decChannel4 As Single = Convert.ToInt32(revertData4, 16) * 0.0001
-                dataLine = dtmNow.ToString("yyyy/MM/dd") & ", " & dtmNow.ToString("HH:mm:00") & ", " & decChannel1 & ", " & decChannel2 & ", " & decChannel3 & ", " & decChannel4
-            Case 5  '5 Channel
-                Dim revertData1 As String = dataFilter.Substring(0, 16)
-                Dim decChannel1 As Single = Convert.ToInt32(revertData1, 16) * 0.0001
-                Dim revertData2 As String = dataFilter.Substring(36, 16)
-                Dim decChannel2 As Single = Convert.ToInt32(revertData2, 16) * 0.0001
-                Dim revertData3 As String = dataFilter.Substring(72, 16)
-                Dim decChannel3 As Single = Convert.ToInt32(revertData3, 16) * 0.0001
-                Dim revertData4 As String = dataFilter.Substring(108, 16)
-                Dim decChannel4 As Single = Convert.ToInt32(revertData4, 16) * 0.0001
-                Dim revertData5 As String = dataFilter.Substring(144, 16)
-                Dim decChannel5 As Single = Convert.ToInt32(revertData5, 16) * 0.0001
-                dataLine = dtmNow.ToString("yyyy/MM/dd") & ", " & dtmNow.ToString("HH:mm:00") & ", " & decChannel1 & ", " & decChannel2 & ", " & decChannel3 & ", " & decChannel4 & ", " & decChannel5
-            Case 6  '6 Channel
-                Dim revertData1 As String = dataFilter.Substring(0, 16)
-                Dim decChannel1 As Single = Convert.ToInt32(revertData1, 16) * 0.0001
-                Dim revertData2 As String = dataFilter.Substring(36, 16)
-                Dim decChannel2 As Single = Convert.ToInt32(revertData2, 16) * 0.0001
-                Dim revertData3 As String = dataFilter.Substring(72, 16)
-                Dim decChannel3 As Single = Convert.ToInt32(revertData3, 16) * 0.0001
-                Dim revertData4 As String = dataFilter.Substring(108, 16)
-                Dim decChannel4 As Single = Convert.ToInt32(revertData4, 16) * 0.0001
-                Dim revertData5 As String = dataFilter.Substring(144, 16)
-                Dim decChannel5 As Single = Convert.ToInt32(revertData5, 16) * 0.0001
-                Dim revertData6 As String = dataFilter.Substring(180, 16)
-                Dim decChannel6 As Single = Convert.ToInt32(revertData6, 16) * 0.0001
-                dataLine = dtmNow.ToString("yyyy/MM/dd") & ", " & dtmNow.ToString("HH:mm:00") & ", " & decChannel1 & ", " & decChannel2 & ", " & decChannel3 & ", " & decChannel4 & ", " & decChannel5 & ", " & decChannel6
-            Case 7  '7 Channel
-                Dim revertData1 As String = dataFilter.Substring(0, 16)
-                Dim decChannel1 As Single = Convert.ToInt32(revertData1, 16) * 0.0001
-                Dim revertData2 As String = dataFilter.Substring(36, 16)
-                Dim decChannel2 As Single = Convert.ToInt32(revertData2, 16) * 0.0001
-                Dim revertData3 As String = dataFilter.Substring(72, 16)
-                Dim decChannel3 As Single = Convert.ToInt32(revertData3, 16) * 0.0001
-                Dim revertData4 As String = dataFilter.Substring(108, 16)
-                Dim decChannel4 As Single = Convert.ToInt32(revertData4, 16) * 0.0001
-                Dim revertData5 As String = dataFilter.Substring(144, 16)
-                Dim decChannel5 As Single = Convert.ToInt32(revertData5, 16) * 0.0001
-                Dim revertData6 As String = dataFilter.Substring(180, 16)
-                Dim decChannel6 As Single = Convert.ToInt32(revertData6, 16) * 0.0001
-                Dim revertData7 As String = dataFilter.Substring(216, 16)
-                Dim decChannel7 As Single = Convert.ToInt32(revertData7, 16) * 0.0001
-                dataLine = dtmNow.ToString("yyyy/MM/dd") & ", " & dtmNow.ToString("HH:mm:00") & ", " & decChannel1 & ", " & decChannel2 & ", " & decChannel3 & ", " & decChannel4 & ", " & decChannel5 & ", " & decChannel6 & ", " & decChannel7
-            Case 8  '8 Channel
-                Dim revertData1 As String = dataFilter.Substring(0, 16)
-                Dim decChannel1 As Single = Convert.ToInt32(revertData1, 16) * 0.0001
-                Dim revertData2 As String = dataFilter.Substring(36, 16)
-                Dim decChannel2 As Single = Convert.ToInt32(revertData2, 16) * 0.0001
-                Dim revertData3 As String = dataFilter.Substring(72, 16)
-                Dim decChannel3 As Single = Convert.ToInt32(revertData3, 16) * 0.0001
-                Dim revertData4 As String = dataFilter.Substring(108, 16)
-                Dim decChannel4 As Single = Convert.ToInt32(revertData4, 16) * 0.0001
-                Dim revertData5 As String = dataFilter.Substring(144, 16)
-                Dim decChannel5 As Single = Convert.ToInt32(revertData5, 16) * 0.0001
-                Dim revertData6 As String = dataFilter.Substring(180, 16)
-                Dim decChannel6 As Single = Convert.ToInt32(revertData6, 16) * 0.0001
-                Dim revertData7 As String = dataFilter.Substring(216, 16)
-                Dim decChannel7 As Single = Convert.ToInt32(revertData7, 16) * 0.0001
-                Dim revertData8 As String = dataFilter.Substring(252, 16)
-                Dim decChannel8 As Single = Convert.ToInt32(revertData8, 16) * 0.0001
-                dataLine = dtmNow.ToString("yyyy/MM/dd") & ", " & dtmNow.ToString("HH:mm:00") & ", " & decChannel1 & ", " & decChannel2 & ", " & decChannel3 & ", " & decChannel4 & ", " & decChannel5 & ", " & decChannel6 & ", " & decChannel7 & ", " & decChannel8
-            Case Else
-        End Select
+    Private Function CreateDataLine(ByVal dtmNowTemp As DateTime, ByVal dataFilterTemp As String)
+        Dim dataLine As String = dtmNowTemp.ToString("yyyy/MM/dd") & "," & dtmNowTemp.ToString("HH:mm:00")
+        Dim revertData1 As String
+        Dim decChannel1 As Single
+        Dim revertData2 As String
+        Dim decChannel2 As Single
+        Dim revertData3 As String
+        Dim decChannel3 As Single
+        Dim revertData4 As String
+        Dim decChannel4 As Single
+        Dim revertData5 As String
+        Dim decChannel5 As Single
+        Dim revertData6 As String
+        Dim decChannel6 As Single
+        Dim revertData7 As String
+        Dim decChannel7 As Single
+        Dim revertData8 As String
+        Dim decChannel8 As Single
+        Dim strdecChannel1 As String
+        Dim strdecChannel2 As String
+        Dim strdecChannel3 As String
+        Dim strdecChannel4 As String
+        Dim strdecChannel5 As String
+        Dim strdecChannel6 As String
+        Dim strdecChannel7 As String
+        Dim strdecChannel8 As String
+        'Channel1
+        Try
+            revertData1 = dataFilterTemp.Substring(0, 16)
+            decChannel1 = Convert.ToInt32(revertData1, 16) * 0.0001
+            strdecChannel1 = decChannel1.ToString()
+        Catch ex As Exception
+            strdecChannel1 = ""
+        End Try
+        'Channel2
+        Try
+            revertData2 = dataFilterTemp.Substring(36, 16)
+            decChannel2 = Convert.ToInt32(revertData2, 16) * 0.0001
+            strdecChannel2 = decChannel2.ToString()
+        Catch ex As Exception
+            strdecChannel2 = ""
+        End Try
+        'Channel3
+        Try
+            revertData3 = dataFilterTemp.Substring(72, 16)
+            decChannel3 = Convert.ToInt32(revertData3, 16) * 0.0001
+            strdecChannel3 = decChannel3.ToString()
+        Catch ex As Exception
+            strdecChannel3 = ""
+        End Try
+        'Channel4
+        Try
+            revertData4 = dataFilterTemp.Substring(108, 16)
+            decChannel4 = Convert.ToInt32(revertData4, 16) * 0.0001
+            strdecChannel4 = decChannel4.ToString()
+        Catch ex As Exception
+            strdecChannel4 = ""
+        End Try
+        'Channel5
+        Try
+            revertData5 = dataFilterTemp.Substring(144, 16)
+            decChannel5 = Convert.ToInt32(revertData5, 16) * 0.0001
+            strdecChannel5 = decChannel5.ToString()
+        Catch ex As Exception
+            strdecChannel5 = ""
+        End Try
+        'Channel6
+        Try
+            revertData6 = dataFilterTemp.Substring(180, 16)
+            decChannel6 = Convert.ToInt32(revertData6, 16) * 0.0001
+            strdecChannel6 = decChannel6.ToString()
+        Catch ex As Exception
+            strdecChannel6 = ""
+        End Try
+        'Channel7
+        Try
+            revertData7 = dataFilterTemp.Substring(216, 16)
+            decChannel7 = Convert.ToInt32(revertData7, 16) * 0.0001
+            strdecChannel7 = decChannel7.ToString()
+        Catch ex As Exception
+            strdecChannel7 = ""
+        End Try
+        'Channel8
+        Try
+            revertData8 = dataFilterTemp.Substring(252, 16)
+            decChannel8 = Convert.ToInt32(revertData8, 16) * 0.0001
+            strdecChannel8 = decChannel8.ToString()
+        Catch ex As Exception
+            strdecChannel8 = ""
+        End Try
+        dataLine &= "," & strdecChannel1 & "," & strdecChannel2 & _
+                    "," & strdecChannel3 & "," & strdecChannel4 & _
+                    "," & strdecChannel5 & "," & strdecChannel6 & _
+                    "," & strdecChannel7 & "," & strdecChannel8
         Return dataLine
     End Function
 #End Region
@@ -312,10 +311,10 @@ Public Class frmMain
         End If
         '違っている場合、CSVにデータを書き込む
         If Not isDuplicate Then
-            Using writer As StreamWriter = New StreamWriter(csvFilePathTemp, True)
+            Using writer As StreamWriter = New StreamWriter(csvFilePathTemp, True, New UTF8Encoding(True))
                 writer.WriteLine(dataLine)
             End Using
-            UploadFileToFtp(serverUri, userName, password, csvFilePathTemp, remoteDirectory)
+            'UploadFileToFtp(serverUri, userName, password, csvFilePathTemp, remoteDirectory)
         End If
     End Sub
 #End Region
@@ -797,8 +796,9 @@ Public Class frmMain
             Dim dataFilter As String = (strRcv).Substring(18)
             'ChannelNumberを取る
             Dim channelNumber As Integer = GetSettingParameter(xmlFilePath, gwIndex1, unitIndex1, channelIndex1).ChannelNumber
+            Console.WriteLine("Channel Number is " & channelNumber)
             'データラインを作成
-            Dim dataLine As String = CreateDataLine(channelNumber, dtmNow, dataFilter)
+            Dim dataLine As String = CreateDataLine(dtmNow, dataFilter)
             '処理されているユニットの情報を取得
             Dim gatewayNo As String = GetSettingParameter(xmlFilePath, gwIndex1, unitIndex1, channelIndex1).GateWayNo
             Dim unitNo As String = GetSettingParameter(xmlFilePath, gwIndex1, unitIndex1, channelIndex1).UnitNo
@@ -832,7 +832,7 @@ Public Class frmMain
                 Using sw As New StreamWriter(csvfilePath, False, New UTF8Encoding(True))
                     'CSVにヘッダーを書く
                     sw.WriteLine(header)
-                    UploadFileToFtp(serverUri, userName, password, csvfilePath, remoteDirectory)
+                    'UploadFileToFtp(serverUri, userName, password, csvfilePath, remoteDirectory)
                 End Using
             Else
                 'CSVファイルが存在している場合、そのCSVファイルを引き続き書き込む
@@ -867,8 +867,7 @@ Public Class frmMain
                 '受信OK→メッセージを表示する
                 frmDebug.lblMessageCommunication.Text = MES_RCV_OK_1
             Else
-                'chkLongRegにチェックが入っているときはメッセージを表示するする
-                frmDebug.lblMessageCommunication.Text = MES_CHK_ERR
+
             End If
             'データを分けて送受信する場合は、送信間隔に関わらず送信する
             If gintComNowCnt < gintComMaxCnt Then
@@ -876,8 +875,11 @@ Public Class frmMain
                 blnRslt = funcSndData1(gwIndex1, unitIndex1, channelIndex1)
                 '送信処理が正常に行えなかったときは、メッセージを表示する
                 If blnRslt = False Then
-                    'メッセージを表示する
-                    frmDebug.lblMessageCommunication.Text = MES_SND_ERR_1
+                    '「TCP接続が出来ません」エラーを記録する
+                    dataErrLine = dtmNow.ToString("yyyy/MM/dd") & "," & dtmNow.ToString("HH:mm:ss") & "," & MES_SND_ERR_1
+                    Using writer As StreamWriter = New StreamWriter(csvfileLogPathList(gwIndex1 - 1), True, New UTF8Encoding(True))
+                        writer.WriteLine(dataErrLine)
+                    End Using
                 End If
                 'chkLoopにチェックが入っていれば、送信間隔管理用タイマスタートする
                 If ginitLoop = True Then
@@ -1384,7 +1386,6 @@ Public Class frmMain
         Dim CHANNELIndex As Integer = currentValues._channelIndex
         Dim UNITNumber As Integer = GetSettingParameter(xmlFilePath, GWIndex, UNITIndex, CHANNELIndex).UnitNumber
         Dim IPADDRESS As String = GetSettingParameter(xmlFilePath, GWIndex, UNITIndex, CHANNELIndex).IPAddress
-
         Dim dtmNow As DateTime
         dtmNow = DateTime.Now
         'GW中の各ユニット処理
@@ -1418,8 +1419,10 @@ Public Class frmMain
             'TCP接続ができなかったときは、終了処理を行う
             If blnRslt = False Then
                 '「TCP接続が出来ません」エラーを記録する
-                Dim dataErrLine = dtmNow.ToString("yyyy/MM/dd") & " " & dtmNow.ToString("HH:mm:ss") & "," & MES_SND_ERR_1
-                CheckAndWriteCSV(csvfileLogPathList(GWIndex - 1), dataErrLine)
+                dataErrLine = dtmNow.ToString("yyyy/MM/dd") & "," & dtmNow.ToString("HH:mm:ss") & "," & MES_SND_ERR_1
+                Using writer As StreamWriter = New StreamWriter(csvfileLogPathList(GWIndex - 1), True, New UTF8Encoding(True))
+                    writer.WriteLine(dataErrLine)
+                End Using
                 Exit Sub
             End If
             'データ送信処理
@@ -1427,8 +1430,11 @@ Public Class frmMain
             Task.Delay(1000).Wait()
             '送信処理が正常に行えなかったときは、メッセージを表示する
             If blnRslt = False Then
-                'メッセージを表示する
-                frmDebug.lblMessageCommunication.Text = MES_SND_ERR_1
+                '「TCP接続が出来ません」エラーを記録する
+                dataErrLine = dtmNow.ToString("yyyy/MM/dd") & "," & dtmNow.ToString("HH:mm:ss") & "," & MES_SND_ERR_1
+                Using writer As StreamWriter = New StreamWriter(csvfileLogPathList(GWIndex - 1), True, New UTF8Encoding(True))
+                    writer.WriteLine(dataErrLine)
+                End Using
                 'chkLoopにチェックが入っていなければ、停止処理を行う
                 If ginitLoop = False Then
                     'チェックが入っていなければ、停止処理を行う
@@ -1444,8 +1450,11 @@ Public Class frmMain
                 blnRslt = funcSndData1(GWIndex, UNITIndex, CHANNELIndex)
                 '送信処理が正常に行えなかったときは、メッセージを表示する
                 If blnRslt = False Then
-                    'メッセージを表示する
-                    frmDebug.lblMessageCommunication.Text = MES_SND_ERR_1
+                    '「TCP接続が出来ません」エラーを記録する
+                    dataErrLine = dtmNow.ToString("yyyy/MM/dd") & "," & dtmNow.ToString("HH:mm:ss") & "," & MES_SND_ERR_1
+                    Using writer As StreamWriter = New StreamWriter(csvfileLogPathList(GWIndex - 1), True, New UTF8Encoding(True))
+                        writer.WriteLine(dataErrLine)
+                    End Using
                 End If
             End If
             '最初のユニットに戻る
