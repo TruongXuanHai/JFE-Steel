@@ -15,6 +15,7 @@ Imports System.IO
 Imports System.Xml
 Imports System.Threading.Tasks
 Imports System.Threading
+Imports System.Globalization
 
 Public Class frmMain
 #Region "ENUM"
@@ -281,18 +282,23 @@ Public Class frmMain
         Catch ex As Exception
             strdecChannel8 = ""
         End Try
+        '時間の時刻と電流瞬時値のデータを組み合わせる
         dataLine &= "," & strdecChannel1 & "," & strdecChannel2 & _
                     "," & strdecChannel3 & "," & strdecChannel4 & _
                     "," & strdecChannel5 & "," & strdecChannel6 & _
                     "," & strdecChannel7 & "," & strdecChannel8
+        '最終データが空の場合は最終カンマ(",")を削除します
+        If dataLine.EndsWith(",") Then
+            dataLine = dataLine.TrimEnd(","c)
+        End If
         Return dataLine
     End Function
 #End Region
 
 #Region "ラストラインの時刻をチェックし、CSVにデータを書き込む"
-    Private Sub CheckAndWriteCSV(ByVal csvFilePathTemp As String, ByVal dataLine As String)
+    Private Sub CheckAndWriteCSV(ByVal csvFilePathTemp As String, ByVal dataLine As String, ByVal loopCycle As Integer)
         Dim lastLine As String = Nothing
-        Dim isDuplicate As Boolean = False
+        Dim isDuplicate As Boolean = True
         If File.Exists(csvFilePathTemp) Then
             'ラストラインデータを取る
             For Each line As String In File.ReadLines(csvFilePathTemp)
@@ -302,14 +308,25 @@ Public Class frmMain
             Next
             '現在の記録時刻と比較する
             If Not lastLine Is Nothing Then
-                Dim lastDateTime As String = lastLine.Split(","c)(0) & ", " & lastLine.Split(","c)(1)
-                Dim newDateTime As String = dataLine.Split(","c)(0) & ", " & dataLine.Split(","c)(1)
-                If lastDateTime = newDateTime Then
-                    isDuplicate = True
+                Dim lastDateTime As String = lastLine.Split(","c)(0) & " " & lastLine.Split(","c)(1)
+                Dim newDateTime As String = dataLine.Split(","c)(0) & " " & dataLine.Split(","c)(1)
+                Dim lastDateTime1 As DateTime
+                Dim newDateTime1 As DateTime
+                Dim format As String = "yyyy/MM/dd HH:mm:ss"
+                If lastDateTime = "日付 時刻" Then
+                    isDuplicate = False
+                Else
+                    lastDateTime1 = DateTime.ParseExact(lastDateTime, format, CultureInfo.InvariantCulture).AddMinutes(loopCycle)
+                    newDateTime1 = DateTime.ParseExact(newDateTime, format, CultureInfo.InvariantCulture)
+                    If newDateTime1 >= lastDateTime1 Then
+                        isDuplicate = False
+                    Else
+                        isDuplicate = True
+                    End If
                 End If
             End If
         End If
-        '違っている場合、CSVにデータを書き込む
+        '時間間隔が10分の場合、CSVにデータを書き込む
         If Not isDuplicate Then
             Using writer As StreamWriter = New StreamWriter(csvFilePathTemp, True, New UTF8Encoding(True))
                 writer.WriteLine(dataLine)
@@ -803,6 +820,7 @@ Public Class frmMain
             Dim gatewayNo As String = GetSettingParameter(xmlFilePath, gwIndex1, unitIndex1, channelIndex1).GateWayNo
             Dim unitNo As String = GetSettingParameter(xmlFilePath, gwIndex1, unitIndex1, channelIndex1).UnitNo
             Dim unitName As String = GetSettingParameter(xmlFilePath, gwIndex1, unitIndex1, channelIndex1).UnitName
+            Dim cycle As Integer = GetSettingParameter(xmlFilePath, gwIndex1, unitIndex1, channelIndex1).Cycle
             '現在の時刻情報を取得
             Dim currentDate As DateTime = DateTime.Now
             Dim currentYear As String = currentDate.Year.ToString("0000")
@@ -836,7 +854,7 @@ Public Class frmMain
                 End Using
             Else
                 'CSVファイルが存在している場合、そのCSVファイルを引き続き書き込む
-                CheckAndWriteCSV(csvfilePath, dataLine)
+                CheckAndWriteCSV(csvfilePath, dataLine, cycle)
             End If
             'chkLongRegにチェックが入っていない時は受信データの正誤チェックを行う
             If gLongReg = False Then
@@ -903,6 +921,7 @@ Public Class frmMain
                 SubProcRcvErr()
                 '受信エラー→メッセージを表示する
                 frmDebug.lblMessageCommunication.Text = MES_RCV_ERR_1
+
             Else
                 'タイムアウトがまだ→タイマスタート
                 funcSndData1(gwIndex1, unitIndex1, channelIndex1)

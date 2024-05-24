@@ -28,6 +28,7 @@ Module getXmlData
         Public Property GateWayNumber As String
         Public Property UnitNumber As String
         Public Property ChannelNumber As String
+        Public Property Cycle As String
     End Class
 
     ' エッジサーバ設定用
@@ -60,7 +61,7 @@ Module getXmlData
         Dim gwNumberNode As XmlNode = xmlDoc.SelectSingleNode("/settings/GWNumber")
         Dim unitNumberNode As XmlNode = xmlDoc.SelectSingleNode("/settings/GW[" & indexGW & "]/UnitNumber")
         Dim channelNumberNode As XmlNode = xmlDoc.SelectSingleNode("/settings/GW[" & indexGW & "]/Unit[" & indexUnit & "]/ChannelNumber")
-
+        Dim circleNode As XmlNode = xmlDoc.SelectSingleNode("/settings/GW[" & indexGW & "]/Cycle")
         If ipAddressNode IsNot Nothing Then
             data.IPAddress = ipAddressNode.InnerText
         End If
@@ -100,7 +101,9 @@ Module getXmlData
         If channelNumberNode IsNot Nothing Then
             data.ChannelNumber = channelNumberNode.InnerText
         End If
-
+        If circleNode IsNot Nothing Then
+            data.Cycle = circleNode.InnerText
+        End If
         Return data
     End Function
 
