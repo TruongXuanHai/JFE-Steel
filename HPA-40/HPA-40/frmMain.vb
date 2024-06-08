@@ -65,6 +65,8 @@ Public Class frmMain
     Dim csvfilePath1 As String = basePath1.ToString() & "errlog" & ".csv"
     Dim xmlFilePath As String = funcGetAppPath() & "\" & UNITSETTING_XML_NAME & ".xml"
     Dim xmlFilePath1 As String = funcGetAppPath() & "\" & FTPSETTING_XML_NAME & ".xml"
+    Dim switchONPath As String = funcGetAppPath() & "\Picture\SWITCH_ON.png"
+    Dim switchOFFPath As String = funcGetAppPath() & "\Picture\SWITCH_OFF.png"
     Dim csvfileLogPathList As New List(Of String)
 #End Region
 
@@ -83,6 +85,8 @@ Public Class frmMain
     Private Const REGI_ONE_MAX As Integer = 125
     Private Const REGI_ALL_MAX As Integer = REGI_ONE_MAX * 2
     Private Const TIME_WRITE_DATA_NUM As Integer = 8   'Modbus書込みデータのデータ数
+    Private isSwitchOnGW As Boolean = True
+    Private isSwitchOnSV As Boolean = True
 #End Region
 
 #Region "変数"
@@ -117,10 +121,31 @@ Public Class frmMain
     Private Sub frmMain_Load(ByVal sender As Object, ByVal e As System.EventArgs) Handles Me.Load
         'フォーム名設定
         Me.Text = TITLE
+        'GWの状態設定
+        pbGWStatus.Image = Image.FromFile(switchONPath)
+        lblGWStatus.Text = "ON"
+        'Serverの状態設定
+        pbServerStatus.Image = Image.FromFile(switchONPath)
+        lblServerStatus.Text = "ON"
+        '1秒毎クロックの時間を更新
+        tmrTimeClock.Interval = 1000 '1秒
+        AddHandler tmrTimeClock.Tick, AddressOf Timer_Tick
+        tmrTimeClock.Start()
+
+        With dtpStartTime
+            .Format = DateTimePickerFormat.Custom
+            .CustomFormat = "yyyy MM dd HH"
+        End With
+
+        With dtpEndTime
+            .Format = DateTimePickerFormat.Custom
+            .CustomFormat = "yyyy MM dd HH"
+        End With
         'フォーム初期化
         subFormInit()
         'コントロール初期化
         subControl(True)
+
         'Hakaruフォルダを作成
         Try
             If Not Directory.Exists(basePath) Then
@@ -164,6 +189,16 @@ Public Class frmMain
     End Sub
 #End Region
 
+#Region "クロックタイム表示"
+    Private Sub Timer_Tick(sender As Object, e As EventArgs)
+        If Me.InvokeRequired Then
+            Me.Invoke(New MethodInvoker(Sub() lblTimeClock.Text = DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss")))
+        Else
+            lblTimeClock.Text = DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss")
+        End If
+    End Sub
+#End Region
+
 #Region "イベント_終了"
     Private Sub frmMain_FormClosed(ByVal sender As Object, ByVal e As System.Windows.Forms.FormClosedEventArgs) Handles Me.FormClosed
         'サーバ側との接続を切断する
@@ -180,20 +215,21 @@ Public Class frmMain
         StartMultipleThreads()
     End Sub
 #End Region
-#Region "イベント_ボタン押下_「停止」ボタン"
-    Private Sub btnStop_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles btnStop.Click
-        'サーバ側との接続を切断する
-        'gobjClsTcpClient.mTcpClose()
-        'コントロール有効化
-        subControl(True)
-        StopAllThreads()
-    End Sub
-#End Region
+    '#Region "イベント_ボタン押下_「停止」ボタン"
+    '    Private Sub btnStop_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles btnStop.Click
+    '        'サーバ側との接続を切断する
+    '        'gobjClsTcpClient.mTcpClose()
+    '        'コントロール有効化
+    '        subControl(True)
+    '        StopAllThreads()
+    '    End Sub
+    '#End Region
 #End Region
 
 #Region "チャンネル数をチェックし、データラインを作成"
-    Private Function CreateDataLine(ByVal dtmNowTemp As DateTime, ByVal dataFilterTemp As String)
-        Dim dataLine As String = dtmNowTemp.ToString("yyyy/MM/dd") & "," & dtmNowTemp.ToString("HH:mm:00")
+    Private Function CreateDataLine(ByVal channelNumberTemp As Integer, ByVal dtmNowTemp As DateTime, ByVal dataFilterTemp As String)
+        Dim dataLine As String = dtmNowTemp.ToString("yyyy/MM/dd HH:mm:ss.fff") & "," & dtmNowTemp.ToString("yyyy/MM/dd HH:mm:00")
+        'Dim dataLine As String = dtmNowTemp.ToString("yyyy/MM/dd") & " " & dtmNowTemp.ToString("HH:mm:ss.fff") & "," & dtmNowTemp.ToString("yyyy/MM/dd") & " " & dtmNowTemp.ToString("HH:mm:00")
         Dim revertData1 As String
         Dim decChannel1 As Single
         Dim revertData2 As String
@@ -221,66 +257,90 @@ Public Class frmMain
         'Channel1
         Try
             revertData1 = dataFilterTemp.Substring(0, 16)
-            decChannel1 = Convert.ToInt32(revertData1, 16) * 0.0001
-            strdecChannel1 = decChannel1.ToString()
+            decChannel1 = Math.Round(Convert.ToInt32(revertData1, 16) * 0.0001, 2)
+            strdecChannel1 = decChannel1.ToString("F2")
+            If strdecChannel1 = "0.00" And channelNumberTemp < 1 Then
+                strdecChannel1 = "0.0"
+            End If
         Catch ex As Exception
-            strdecChannel1 = ""
+            strdecChannel1 = "0.0"
         End Try
         'Channel2
         Try
             revertData2 = dataFilterTemp.Substring(36, 16)
-            decChannel2 = Convert.ToInt32(revertData2, 16) * 0.0001
-            strdecChannel2 = decChannel2.ToString()
+            decChannel2 = Math.Round(Convert.ToInt32(revertData2, 16) * 0.0001, 2)
+            strdecChannel2 = decChannel2.ToString("F2")
+            If strdecChannel2 = "0.00" And channelNumberTemp < 2 Then
+                strdecChannel2 = "0.0"
+            End If
         Catch ex As Exception
-            strdecChannel2 = ""
+            strdecChannel2 = "0.0"
         End Try
         'Channel3
         Try
             revertData3 = dataFilterTemp.Substring(72, 16)
-            decChannel3 = Convert.ToInt32(revertData3, 16) * 0.0001
-            strdecChannel3 = decChannel3.ToString()
+            decChannel3 = Math.Round(Convert.ToInt32(revertData3, 16) * 0.0001, 2)
+            strdecChannel3 = decChannel3.ToString("F2")
+            If strdecChannel3 = "0.00" And channelNumberTemp < 3 Then
+                strdecChannel3 = "0.0"
+            End If
         Catch ex As Exception
-            strdecChannel3 = ""
+            strdecChannel3 = "0.0"
         End Try
         'Channel4
         Try
             revertData4 = dataFilterTemp.Substring(108, 16)
-            decChannel4 = Convert.ToInt32(revertData4, 16) * 0.0001
-            strdecChannel4 = decChannel4.ToString()
+            decChannel4 = Math.Round(Convert.ToInt32(revertData4, 16) * 0.0001, 2)
+            strdecChannel4 = decChannel4.ToString("F2")
+            If strdecChannel4 = "0.00" And channelNumberTemp < 4 Then
+                strdecChannel4 = "0.0"
+            End If
         Catch ex As Exception
-            strdecChannel4 = ""
+            strdecChannel4 = "0.0"
         End Try
         'Channel5
         Try
             revertData5 = dataFilterTemp.Substring(144, 16)
-            decChannel5 = Convert.ToInt32(revertData5, 16) * 0.0001
-            strdecChannel5 = decChannel5.ToString()
+            decChannel5 = Math.Round(Convert.ToInt32(revertData5, 16) * 0.0001, 2)
+            strdecChannel5 = decChannel5.ToString("F2")
+            If strdecChannel5 = "0.00" And channelNumberTemp < 5 Then
+                strdecChannel5 = "0.0"
+            End If
         Catch ex As Exception
-            strdecChannel5 = ""
+            strdecChannel5 = "0.0"
         End Try
         'Channel6
         Try
             revertData6 = dataFilterTemp.Substring(180, 16)
-            decChannel6 = Convert.ToInt32(revertData6, 16) * 0.0001
-            strdecChannel6 = decChannel6.ToString()
+            decChannel6 = Math.Round(Convert.ToInt32(revertData6, 16) * 0.0001, 2)
+            strdecChannel6 = decChannel6.ToString("F2")
+            If strdecChannel6 = "0.00" And channelNumberTemp < 6 Then
+                strdecChannel6 = "0.0"
+            End If
         Catch ex As Exception
-            strdecChannel6 = ""
+            strdecChannel6 = "0.0"
         End Try
         'Channel7
         Try
             revertData7 = dataFilterTemp.Substring(216, 16)
-            decChannel7 = Convert.ToInt32(revertData7, 16) * 0.0001
-            strdecChannel7 = decChannel7.ToString()
+            decChannel7 = Math.Round(Convert.ToInt32(revertData7, 16) * 0.0001, 2)
+            strdecChannel7 = decChannel7.ToString("F2")
+            If strdecChannel7 = "0.00" And channelNumberTemp < 7 Then
+                strdecChannel7 = "0.0"
+            End If
         Catch ex As Exception
-            strdecChannel7 = ""
+            strdecChannel7 = "0.0"
         End Try
         'Channel8
         Try
             revertData8 = dataFilterTemp.Substring(252, 16)
-            decChannel8 = Convert.ToInt32(revertData8, 16) * 0.0001
-            strdecChannel8 = decChannel8.ToString()
+            decChannel8 = Math.Round(Convert.ToInt32(revertData8, 16) * 0.0001, 2)
+            strdecChannel8 = decChannel8.ToString("F2")
+            If strdecChannel8 = "0.00" And channelNumberTemp < 8 Then
+                strdecChannel8 = "0.0"
+            End If
         Catch ex As Exception
-            strdecChannel8 = ""
+            strdecChannel8 = "0.0"
         End Try
         '時間の時刻と電流瞬時値のデータを組み合わせる
         dataLine &= "," & strdecChannel1 & "," & strdecChannel2 & _
@@ -308,14 +368,19 @@ Public Class frmMain
             Next
             '現在の記録時刻と比較する
             If Not lastLine Is Nothing Then
-                Dim lastDateTime As String = lastLine.Split(","c)(0) & " " & lastLine.Split(","c)(1)
-                Dim newDateTime As String = dataLine.Split(","c)(0) & " " & dataLine.Split(","c)(1)
+                'Dim lastDateTime As String = lastLine.Split(","c)(0) & " " & lastLine.Split(","c)(1)
+                Console.WriteLine("lastLine: " & lastLine)
+                Dim lastDateTime As String = (lastLine.Split(","c)(1))
+                'Dim newDateTime As String = dataLine.Split(","c)(0) & " " & dataLine.Split(","c)(1)
+                Dim newDateTime As String = (dataLine.Split(","c)(1))
                 Dim lastDateTime1 As DateTime
                 Dim newDateTime1 As DateTime
                 Dim format As String = "yyyy/MM/dd HH:mm:ss"
-                If lastDateTime = "日付 時刻" Then
+                '"日付 時刻"
+                If lastDateTime = "時刻" Then
                     isDuplicate = False
                 Else
+                    Console.WriteLine("lastDateTime1" & lastDateTime1)
                     lastDateTime1 = DateTime.ParseExact(lastDateTime, format, CultureInfo.InvariantCulture).AddMinutes(loopCycle)
                     newDateTime1 = DateTime.ParseExact(newDateTime, format, CultureInfo.InvariantCulture)
                     If newDateTime1 >= lastDateTime1 Then
@@ -325,10 +390,19 @@ Public Class frmMain
                     End If
                 End If
             End If
-        End If
+            End If
         '時間間隔が10分の場合、CSVにデータを書き込む
         If Not isDuplicate Then
             Using writer As StreamWriter = New StreamWriter(csvFilePathTemp, True, New UTF8Encoding(True))
+                'Dim parts As String() = dataLine.Split(",")
+                'If parts(1) = "時刻" Then
+                '    writer.WriteLine(dataLine)
+                'Else
+                '    parts(1) = """" & parts(1) & """"
+                '    Dim modifiedString As String = String.Join(",", parts)
+                '    writer.WriteLine(modifiedString)
+                'End If
+
                 writer.WriteLine(dataLine)
             End Using
             'UploadFileToFtp(serverUri, userName, password, csvFilePathTemp, remoteDirectory)
@@ -384,19 +458,16 @@ Public Class frmMain
     'Returns:
     '  None
     Private Sub subControl(ByVal blnEnable As Boolean)
-        'テキストボックス
-        'ラジオボタン
-
         '「開始」ボタン
         btnStart.Enabled = blnEnable
-
         '「停止」ボタン
         If blnEnable = True Then
-            btnStop.Enabled = False
+            'btnStop.Enabled = False
         Else
-            btnStop.Enabled = True
+            'btnStop.Enabled = True
         End If
     End Sub
+
 #End Region
 
 #Region "関数_入力値チェック"
@@ -815,7 +886,7 @@ Public Class frmMain
             Dim channelNumber As Integer = GetSettingParameter(xmlFilePath, gwIndex1, unitIndex1, channelIndex1).ChannelNumber
             Console.WriteLine("Channel Number is " & channelNumber)
             'データラインを作成
-            Dim dataLine As String = CreateDataLine(dtmNow, dataFilter)
+            Dim dataLine As String = CreateDataLine(channelNumber, dtmNow, dataFilter)
             '処理されているユニットの情報を取得
             Dim gatewayNo As String = GetSettingParameter(xmlFilePath, gwIndex1, unitIndex1, channelIndex1).GateWayNo
             Dim unitNo As String = GetSettingParameter(xmlFilePath, gwIndex1, unitIndex1, channelIndex1).UnitNo
@@ -829,7 +900,7 @@ Public Class frmMain
             'CSVファイルのディレクトリ構造を作成
             Dim csvfilePath As String = basePath.ToString() & gatewayNo & "\" & unitNo & "\" & currentYear & "\" & currentMonth & "\" & unitName & "_" & currentYear & currentMonth & currentDay & ".csv"
             'CSVファイルのヘッダーを初期
-            Dim header As String = "日付,時刻,"
+            Dim header As String = "送信時刻,時刻,"
             If Not File.Exists(csvfilePath) Then
                 Dim directoryPath As String = Path.GetDirectoryName(csvfilePath)
                 If Not Directory.Exists(directoryPath) Then
@@ -849,7 +920,7 @@ Public Class frmMain
                 End If
                 Using sw As New StreamWriter(csvfilePath, False, New UTF8Encoding(True))
                     'CSVにヘッダーを書く
-                    sw.WriteLine(header)
+                    'sw.WriteLine(header)
                     'UploadFileToFtp(serverUri, userName, password, csvfilePath, remoteDirectory)
                 End Using
             Else
@@ -1461,21 +1532,21 @@ Public Class frmMain
                     gobjClsTcpClient.mTcpClose()
                 End If
             End If
-            'chkLoopにチェックが入っていれば、送信間隔管理用タイマスタートする
-            If ginitLoop = True Then
-                '送信間隔管理用タイマスタート
-                gintCntTmr2Tick = 0
-                'データ送信処理
-                blnRslt = funcSndData1(GWIndex, UNITIndex, CHANNELIndex)
-                '送信処理が正常に行えなかったときは、メッセージを表示する
-                If blnRslt = False Then
-                    '「TCP接続が出来ません」エラーを記録する
-                    dataErrLine = dtmNow.ToString("yyyy/MM/dd") & "," & dtmNow.ToString("HH:mm:ss") & "," & MES_SND_ERR_1
-                    Using writer As StreamWriter = New StreamWriter(csvfileLogPathList(GWIndex - 1), True, New UTF8Encoding(True))
-                        writer.WriteLine(dataErrLine)
-                    End Using
-                End If
-            End If
+            ''chkLoopにチェックが入っていれば、送信間隔管理用タイマスタートする
+            'If ginitLoop = True Then
+            '    '送信間隔管理用タイマスタート
+            '    gintCntTmr2Tick = 0
+            '    'データ送信処理
+            '    blnRslt = funcSndData1(GWIndex, UNITIndex, CHANNELIndex)
+            '    '送信処理が正常に行えなかったときは、メッセージを表示する
+            '    If blnRslt = False Then
+            '        '「TCP接続が出来ません」エラーを記録する
+            '        dataErrLine = dtmNow.ToString("yyyy/MM/dd") & "," & dtmNow.ToString("HH:mm:ss") & "," & MES_SND_ERR_1
+            '        Using writer As StreamWriter = New StreamWriter(csvfileLogPathList(GWIndex - 1), True, New UTF8Encoding(True))
+            '            writer.WriteLine(dataErrLine)
+            '        End Using
+            '    End If
+            'End If
             '最初のユニットに戻る
             If UNITIndex = UNITNumber Then
                 UNITIndex = 1
@@ -1487,6 +1558,53 @@ Public Class frmMain
             Task.Delay(2000).Wait()
         End While
     End Sub
+#End Region
+
+#Region "関数_コントロール処理"
+    'ピクチャーボックスなどのコントロールの有効/無効を切り替える
+    'Parameters:
+    '  ByVal isSwitchOnGW As Boolean：True→有効、False→無効
+    'Returns:
+    '  None
+    Private Sub UpdateSwitchGW()
+        If isSwitchOnGW Then
+            pbGWStatus.Image = Image.FromFile(switchONPath)
+            lblGWStatus.Text = "ON"
+        Else
+            pbGWStatus.Image = Image.FromFile(switchOFFPath)
+            lblGWStatus.Text = "OFF"
+            lblPendingNumber.Text = "0"
+        End If
+    End Sub
+    'ピクチャーボックスなどのコントロールの有効/無効を切り替える
+    'Parameters:
+    '  ByVal isSwitchOnSV As Boolean：True→有効、False→無効
+    'Returns:
+    '  None
+    Private Sub UpdateSwitchSV()
+        If isSwitchOnSV Then
+            pbServerStatus.Image = Image.FromFile(switchONPath)
+            lblServerStatus.Text = "ON"
+        Else
+            pbServerStatus.Image = Image.FromFile(switchOFFPath)
+            lblServerStatus.Text = "OFF"
+        End If
+    End Sub
+#End Region
+
+#Region "イベント_ピクチャーボックス押下"
+#Region "イベント_ピクチャーボックス押下_Gateway"
+    Private Sub pbGWStatus_Click(sender As Object, e As EventArgs) Handles pbGWStatus.Click
+        isSwitchOnGW = Not isSwitchOnGW
+        UpdateSwitchGW()
+    End Sub
+#End Region
+#Region "イベント_ピクチャーボックス押下_Server"
+    Private Sub pbServerStatus_Click(sender As Object, e As EventArgs) Handles pbServerStatus.Click
+        isSwitchOnSV = Not isSwitchOnSV
+        UpdateSwitchSV()
+    End Sub
+#End Region
 #End Region
 End Class
 
