@@ -65,8 +65,8 @@ Public Class frmMain
     Dim csvfilePath1 As String = basePath1.ToString() & "errlog" & ".csv"
     Dim xmlFilePath As String = funcGetAppPath() & "\" & UNITSETTING_XML_NAME & ".xml"
     Dim xmlFilePath1 As String = funcGetAppPath() & "\" & FTPSETTING_XML_NAME & ".xml"
-    Dim switchONPath As String = funcGetAppPath() & "\Picture\SWITCH_ON.png"
-    Dim switchOFFPath As String = funcGetAppPath() & "\Picture\SWITCH_OFF.png"
+    Dim switchONPath As String = funcGetAppPath() & "\Icon\SWITCH-ON.png"
+    Dim switchOFFPath As String = funcGetAppPath() & "\Icon\SWITCH-OFF.png"
     Dim csvfileLogPathList As New List(Of String)
 #End Region
 
@@ -75,7 +75,7 @@ Public Class frmMain
     Private Const UNITSETTING_XML_NAME As String = "Unitsetting"
     Private Const FTPSETTING_XML_NAME As String = "FTPsetting"
     Private Const MAINLOG_TXT_NAME As String = "MainErr"
-    Private Const APP_NAME_2 As String = "JFEスチール向けエッジサーバ転送"
+    Private Const APP_NAME_2 As String = "上位サーバ転送"
     Private Const VER_NUM As String = "Ver.1.00"
     Private Const TITLE As String = APP_NAME_2 & " (" & APP_NAME_1 & ")" & " " & VER_NUM
     Private Const MES_RCV_OK_1 As String = "受信OK"
@@ -141,6 +141,8 @@ Public Class frmMain
             .Format = DateTimePickerFormat.Custom
             .CustomFormat = "yyyy MM dd HH"
         End With
+
+
         'フォーム初期化
         subFormInit()
         'コントロール初期化
@@ -224,6 +226,38 @@ Public Class frmMain
     '        StopAllThreads()
     '    End Sub
     '#End Region
+#Region "イベント_ピクチャーボックス押下_Gateway"
+    Private Sub pbGWStatus_Click(sender As Object, e As EventArgs) Handles pbGWStatus.Click
+        isSwitchOnGW = Not isSwitchOnGW
+        UpdateSwitchGW()
+    End Sub
+#End Region
+#Region "イベント_ピクチャーボックス押下_Server"
+    Private Sub pbServerStatus_Click(sender As Object, e As EventArgs) Handles pbServerStatus.Click
+        isSwitchOnSV = Not isSwitchOnSV
+        UpdateSwitchSV()
+    End Sub
+#End Region
+
+#Region "イベント_データ取得ボタン押下"
+    Private Sub btnDataCollect_Click(sender As Object, e As EventArgs) Handles btnDataCollect.Click
+        Dim startTime As DateTime = dtpStartTime.Value
+        Dim endTime As DateTime = dtpEndTime.Value
+        Dim startTimeMod = New DateTime(startTime.Year, startTime.Month, startTime.Day, startTime.Hour, 0, 0)
+        Dim endTimeMod = New DateTime(endTime.Year, endTime.Month, endTime.Day, endTime.Hour, 0, 0)
+        Debug.WriteLine("StartTime: " & startTimeMod.ToString())
+        Dim timeDistance = endTimeMod.Subtract(startTimeMod)
+        If startTimeMod > DateTime.Now Then
+            MessageBox.Show("開始時間が現在時刻より未来に設定されています。", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        ElseIf endTimeMod > DateTime.Now Then
+            MessageBox.Show("終了時間が現在時刻より未来に設定されています。", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        ElseIf startTimeMod > endTimeMod Then
+            MessageBox.Show("開始時間が終了時間より未来に設定されています。", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        ElseIf Math.Abs(timeDistance.TotalDays) > 31 Then
+            MessageBox.Show("期間が１ヶ月を超えています。", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End If
+    End Sub
+#End Region
 #End Region
 
 #Region "チャンネル数をチェックし、データラインを作成"
@@ -390,7 +424,7 @@ Public Class frmMain
                     End If
                 End If
             End If
-            End If
+        End If
         '時間間隔が10分の場合、CSVにデータを書き込む
         If Not isDuplicate Then
             Using writer As StreamWriter = New StreamWriter(csvFilePathTemp, True, New UTF8Encoding(True))
@@ -468,6 +502,55 @@ Public Class frmMain
         End If
     End Sub
 
+    'ピクチャーボックスなどのコントロールの有効/無効を切り替える
+    'Parameters:
+    '  ByVal isSwitchOnGW As Boolean：True→有効、False→無効
+    'Returns:
+    '  None
+    Private Sub UpdateSwitchGW()
+        Dim xmlDoc As New XmlDocument()
+        xmlDoc.Load(xmlFilePath)
+        Dim GWSettingNode As XmlNode = xmlDoc.SelectSingleNode("/settings/GWSetting")
+        If isSwitchOnGW Then
+            pbGWStatus.Image = Image.FromFile(switchONPath)
+            lblGWStatus.Text = "ON"
+            If GWSettingNode IsNot Nothing Then
+                GWSettingNode.InnerText = "1"
+            End If
+        Else
+            pbGWStatus.Image = Image.FromFile(switchOFFPath)
+            lblGWStatus.Text = "OFF"
+            If GWSettingNode IsNot Nothing Then
+                GWSettingNode.InnerText = "0"
+            End If
+        End If
+        xmlDoc.Save(xmlFilePath)
+    End Sub
+
+    'ピクチャーボックスなどのコントロールの有効/無効を切り替える
+    'Parameters:
+    '  ByVal isSwitchOnSV As Boolean：True→有効、False→無効
+    'Returns:
+    '  None
+    Private Sub UpdateSwitchSV()
+        Dim xmlDoc As New XmlDocument()
+        xmlDoc.Load(xmlFilePath)
+        Dim serverSettingNode As XmlNode = xmlDoc.SelectSingleNode("/settings/ServerSetting")
+        If isSwitchOnSV Then
+            pbServerStatus.Image = Image.FromFile(switchONPath)
+            lblServerStatus.Text = "ON"
+            If serverSettingNode IsNot Nothing Then
+                serverSettingNode.InnerText = "1"
+            End If
+        Else
+            pbServerStatus.Image = Image.FromFile(switchOFFPath)
+            lblServerStatus.Text = "OFF"
+            If serverSettingNode IsNot Nothing Then
+                serverSettingNode.InnerText = "0"
+            End If
+        End If
+        xmlDoc.Save(xmlFilePath)
+    End Sub
 #End Region
 
 #Region "関数_入力値チェック"
@@ -1532,27 +1615,27 @@ Public Class frmMain
                     gobjClsTcpClient.mTcpClose()
                 End If
             End If
-            ''chkLoopにチェックが入っていれば、送信間隔管理用タイマスタートする
-            'If ginitLoop = True Then
-            '    '送信間隔管理用タイマスタート
-            '    gintCntTmr2Tick = 0
-            '    'データ送信処理
-            '    blnRslt = funcSndData1(GWIndex, UNITIndex, CHANNELIndex)
-            '    '送信処理が正常に行えなかったときは、メッセージを表示する
-            '    If blnRslt = False Then
-            '        '「TCP接続が出来ません」エラーを記録する
-            '        dataErrLine = dtmNow.ToString("yyyy/MM/dd") & "," & dtmNow.ToString("HH:mm:ss") & "," & MES_SND_ERR_1
-            '        Using writer As StreamWriter = New StreamWriter(csvfileLogPathList(GWIndex - 1), True, New UTF8Encoding(True))
-            '            writer.WriteLine(dataErrLine)
-            '        End Using
-            '    End If
-            'End If
+            'chkLoopにチェックが入っていれば、送信間隔管理用タイマスタートする
+            If ginitLoop = True Then
+                '送信間隔管理用タイマスタート
+                gintCntTmr2Tick = 0
+                'データ送信処理
+                blnRslt = funcSndData1(GWIndex, UNITIndex, CHANNELIndex)
+                '送信処理が正常に行えなかったときは、メッセージを表示する
+                If blnRslt = False Then
+                    '「TCP接続が出来ません」エラーを記録する
+                    dataErrLine = dtmNow.ToString("yyyy/MM/dd") & "," & dtmNow.ToString("HH:mm:ss") & "," & MES_SND_ERR_1
+                    Using writer As StreamWriter = New StreamWriter(csvfileLogPathList(GWIndex - 1), True, New UTF8Encoding(True))
+                        writer.WriteLine(dataErrLine)
+                    End Using
+                End If
+            End If
             '最初のユニットに戻る
             If UNITIndex = UNITNumber Then
                 UNITIndex = 1
             Else
                 '次のユニットをプロセスする
-                UNITIndex = UNITIndex + 1
+                UNITIndex += 1
             End If
             params.Update(GWIndex, UNITIndex, CHANNELIndex)
             Task.Delay(2000).Wait()
@@ -1560,51 +1643,6 @@ Public Class frmMain
     End Sub
 #End Region
 
-#Region "関数_コントロール処理"
-    'ピクチャーボックスなどのコントロールの有効/無効を切り替える
-    'Parameters:
-    '  ByVal isSwitchOnGW As Boolean：True→有効、False→無効
-    'Returns:
-    '  None
-    Private Sub UpdateSwitchGW()
-        If isSwitchOnGW Then
-            pbGWStatus.Image = Image.FromFile(switchONPath)
-            lblGWStatus.Text = "ON"
-        Else
-            pbGWStatus.Image = Image.FromFile(switchOFFPath)
-            lblGWStatus.Text = "OFF"
-            lblPendingNumber.Text = "0"
-        End If
-    End Sub
-    'ピクチャーボックスなどのコントロールの有効/無効を切り替える
-    'Parameters:
-    '  ByVal isSwitchOnSV As Boolean：True→有効、False→無効
-    'Returns:
-    '  None
-    Private Sub UpdateSwitchSV()
-        If isSwitchOnSV Then
-            pbServerStatus.Image = Image.FromFile(switchONPath)
-            lblServerStatus.Text = "ON"
-        Else
-            pbServerStatus.Image = Image.FromFile(switchOFFPath)
-            lblServerStatus.Text = "OFF"
-        End If
-    End Sub
-#End Region
 
-#Region "イベント_ピクチャーボックス押下"
-#Region "イベント_ピクチャーボックス押下_Gateway"
-    Private Sub pbGWStatus_Click(sender As Object, e As EventArgs) Handles pbGWStatus.Click
-        isSwitchOnGW = Not isSwitchOnGW
-        UpdateSwitchGW()
-    End Sub
-#End Region
-#Region "イベント_ピクチャーボックス押下_Server"
-    Private Sub pbServerStatus_Click(sender As Object, e As EventArgs) Handles pbServerStatus.Click
-        isSwitchOnSV = Not isSwitchOnSV
-        UpdateSwitchSV()
-    End Sub
-#End Region
-#End Region
 End Class
 
