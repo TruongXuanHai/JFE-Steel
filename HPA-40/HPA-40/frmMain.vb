@@ -16,6 +16,7 @@ Imports System.Xml
 Imports System.Threading.Tasks
 Imports System.Threading
 Imports System.Globalization
+Imports System.Timers
 
 Public Class frmMain
 #Region "ENUM"
@@ -60,9 +61,9 @@ Public Class frmMain
 #End Region
 
 #Region "ディレクトリ"
-    Dim basePath As String = funcGetAppPath() & "\Hakaru\"
-    Dim basePath1 As String = funcGetAppPath() & "\Hakaru\ErrLog\"
-    Dim csvfilePath1 As String = basePath1.ToString() & "errlog" & ".csv"
+    Dim basePath As String = funcGetAppPath() & "\Gateway\"
+    Dim basePath1 As String = funcGetAppPath() & "\ErrLog\"
+    Dim csvfilePath1 As String = basePath1.ToString() & "errlog" & ".log"
     Dim xmlFilePath As String = funcGetAppPath() & "\" & UNITSETTING_XML_NAME & ".xml"
     Dim xmlFilePath1 As String = funcGetAppPath() & "\" & FTPSETTING_XML_NAME & ".xml"
     Dim switchONPath As String = funcGetAppPath() & "\Icon\SWITCH-ON.png"
@@ -1003,7 +1004,7 @@ Public Class frmMain
                 End If
                 Using sw As New StreamWriter(csvfilePath, False, New UTF8Encoding(True))
                     'CSVにヘッダーを書く
-                    'sw.WriteLine(header)
+                    sw.WriteLine(header)
                     'UploadFileToFtp(serverUri, userName, password, csvfilePath, remoteDirectory)
                 End Using
             Else
@@ -1616,20 +1617,20 @@ Public Class frmMain
                 End If
             End If
             'chkLoopにチェックが入っていれば、送信間隔管理用タイマスタートする
-            If ginitLoop = True Then
-                '送信間隔管理用タイマスタート
-                gintCntTmr2Tick = 0
-                'データ送信処理
-                blnRslt = funcSndData1(GWIndex, UNITIndex, CHANNELIndex)
-                '送信処理が正常に行えなかったときは、メッセージを表示する
-                If blnRslt = False Then
-                    '「TCP接続が出来ません」エラーを記録する
-                    dataErrLine = dtmNow.ToString("yyyy/MM/dd") & "," & dtmNow.ToString("HH:mm:ss") & "," & MES_SND_ERR_1
-                    Using writer As StreamWriter = New StreamWriter(csvfileLogPathList(GWIndex - 1), True, New UTF8Encoding(True))
-                        writer.WriteLine(dataErrLine)
-                    End Using
-                End If
-            End If
+            'If ginitLoop = True Then
+            '    '送信間隔管理用タイマスタート
+            '    gintCntTmr2Tick = 0
+            '    'データ送信処理
+            '    blnRslt = funcSndData1(GWIndex, UNITIndex, CHANNELIndex)
+            '    '送信処理が正常に行えなかったときは、メッセージを表示する
+            '    If blnRslt = False Then
+            '        '「TCP接続が出来ません」エラーを記録する
+            '        dataErrLine = dtmNow.ToString("yyyy/MM/dd") & "," & dtmNow.ToString("HH:mm:ss") & "," & MES_SND_ERR_1
+            '        Using writer As StreamWriter = New StreamWriter(csvfileLogPathList(GWIndex - 1), True, New UTF8Encoding(True))
+            '            writer.WriteLine(dataErrLine)
+            '        End Using
+            '    End If
+            'End If
             '最初のユニットに戻る
             If UNITIndex = UNITNumber Then
                 UNITIndex = 1

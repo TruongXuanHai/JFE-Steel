@@ -13,6 +13,10 @@ Imports System.Xml.Linq
 Module getXmlData
     ' ユニット設定用
     Public Class UnitXmlData
+        Public Property GWSetting As String
+        Public Property ServerSetting As String
+        Public Property DelayTime As String
+
         Public Property IPAddress As String
         Public Property LoRaAddress As String
         Public Property ModbusAddress As String
@@ -59,6 +63,9 @@ Module getXmlData
         Dim channelNoNode As XmlNode = xmlDoc.SelectSingleNode("/settings/GW[" & indexGW & "]/Unit[" & indexUnit & "]/Channel/CH[" & indexChannel & "]/CHNo")
         Dim channelNameNode As XmlNode = xmlDoc.SelectSingleNode("/settings/GW[" & indexGW & "]/Unit[" & indexUnit & "]/Channel/CH[" & indexChannel & "]/CHName")
         Dim gwNumberNode As XmlNode = xmlDoc.SelectSingleNode("/settings/GWNumber")
+        Dim gwSettingNode As XmlNode = xmlDoc.SelectSingleNode("/settings/ServerSetting")
+        Dim delayTimeNode As XmlNode = xmlDoc.SelectSingleNode("/settings/DelayTime")
+        Dim serverSettingNode As XmlNode = xmlDoc.SelectSingleNode("/settings/GWSetting")
         Dim unitNumberNode As XmlNode = xmlDoc.SelectSingleNode("/settings/GW[" & indexGW & "]/UnitNumber")
         Dim channelNumberNode As XmlNode = xmlDoc.SelectSingleNode("/settings/GW[" & indexGW & "]/Unit[" & indexUnit & "]/ChannelNumber")
         Dim circleNode As XmlNode = xmlDoc.SelectSingleNode("/settings/GW[" & indexGW & "]/Cycle")
@@ -94,6 +101,15 @@ Module getXmlData
         End If
         If gwNumberNode IsNot Nothing Then
             data.GateWayNumber = gwNumberNode.InnerText
+        End If
+        If gwSettingNode IsNot Nothing Then
+            data.GWSetting = gwSettingNode.InnerText
+        End If
+        If serverSettingNode IsNot Nothing Then
+            data.ServerSetting = serverSettingNode.InnerText
+        End If
+        If delayTimeNode IsNot Nothing Then
+            data.DelayTime = delayTimeNode.InnerText
         End If
         If unitNumberNode IsNot Nothing Then
             data.UnitNumber = unitNumberNode.InnerText
@@ -133,7 +149,6 @@ Module getXmlData
         If remoteDirectoryNode IsNot Nothing Then
             data.RemoteDirectory = remoteDirectoryNode.InnerText
         End If
-
         Return data
     End Function
 End Module
