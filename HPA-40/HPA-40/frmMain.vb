@@ -61,13 +61,14 @@ Public Class frmMain
 #End Region
 
 #Region "ディレクトリ"
-    Dim basePath As String = funcGetAppPath() & "\Gateway\"
-    Dim basePath1 As String = funcGetAppPath() & "\ErrLog\"
-    Dim csvfilePath1 As String = basePath1.ToString() & "errlog" & ".log"
-    Dim xmlFilePath As String = funcGetAppPath() & "\" & UNITSETTING_XML_NAME & ".xml"
-    Dim xmlFilePath1 As String = funcGetAppPath() & "\" & FTPSETTING_XML_NAME & ".xml"
-    Dim switchONPath As String = funcGetAppPath() & "\Icon\SWITCH-ON.png"
-    Dim switchOFFPath As String = funcGetAppPath() & "\Icon\SWITCH-OFF.png"
+    Dim strbasePathGateway As String = funcGetAppPath() & "\Gateway\"
+    Dim strbasePathServer As String = funcGetAppPath() & "\Server\"
+    Dim strbasePathFailed As String = funcGetAppPath() & "\Failed\"
+    Dim strbasePathErrLog As String = funcGetAppPath() & "\ErrLog\"
+    Dim strxmlFilePathGateway As String = funcGetAppPath() & "\" & UNITSETTING_XML_NAME & ".xml"
+    Dim strxmlFilePathServer As String = funcGetAppPath() & "\" & FTPSETTING_XML_NAME & ".xml"
+    Dim strswitchONPath As String = funcGetAppPath() & "\Icon\SWITCH-ON.png"
+    Dim strswitchOFFPath As String = funcGetAppPath() & "\Icon\SWITCH-OFF.png"
     Dim csvfileLogPathList As New List(Of String)
 #End Region
 
@@ -107,13 +108,15 @@ Public Class frmMain
     Private gtxtReadData(REGI_ALL_MAX - 1) As TextBox
     Private gtxtWriteData(REGI_ALL_MAX - 1) As TextBox
     Private cancellationTokenSource As CancellationTokenSource
+    Private WithEvents timerForQueue As System.Timers.Timer
+    Private timeQueue As Queue(Of String)
 #End Region
 
 #Region "FTP設定"
-    Private serverUri As String = GetServerParameter(xmlFilePath1).IPAddress
-    Private userName As String = GetServerParameter(xmlFilePath1).UserName
-    Private password As String = GetServerParameter(xmlFilePath1).PassWord
-    Private remoteDirectory As String = GetServerParameter(xmlFilePath1).RemoteDirectory
+    Private strServerIp As String = GetServerParameter(strxmlFilePathServer).IPAddress
+    Private strUserName As String = GetServerParameter(strxmlFilePathServer).UserName
+    Private strPassword As String = GetServerParameter(strxmlFilePathServer).PassWord
+    Private strRemoteDirectory As String = GetServerParameter(strxmlFilePathServer).RemoteDirectory
 #End Region
 
     Dim dataErrLine As String
@@ -123,10 +126,10 @@ Public Class frmMain
         'フォーム名設定
         Me.Text = TITLE
         'GWの状態設定
-        pbGWStatus.Image = Image.FromFile(switchONPath)
+        pbGWStatus.Image = Image.FromFile(strswitchONPath)
         lblGWStatus.Text = "ON"
         'Serverの状態設定
-        pbServerStatus.Image = Image.FromFile(switchONPath)
+        pbServerStatus.Image = Image.FromFile(strswitchONPath)
         lblServerStatus.Text = "ON"
         '1秒毎クロックの時間を更新
         tmrTimeClock.Interval = 1000 '1秒
@@ -151,16 +154,16 @@ Public Class frmMain
 
         'Hakaruフォルダを作成
         Try
-            If Not Directory.Exists(basePath) Then
-                Directory.CreateDirectory(basePath)
+            If Not Directory.Exists(strbasePathGateway) Then
+                Directory.CreateDirectory(strbasePathGateway)
             End If
         Catch ex As Exception
             Console.WriteLine("エラー: " & ex.Message)
         End Try
         'ErrLogフォルダを作成 (Hakaru/ErrLog)
         Try
-            If Not Directory.Exists(basePath1) Then
-                Directory.CreateDirectory(basePath1)
+            If Not Directory.Exists(strbasePathErrLog) Then
+                Directory.CreateDirectory(strbasePathErrLog)
             End If
         Catch ex As Exception
             Console.WriteLine("エラー: " & ex.Message)
@@ -168,9 +171,9 @@ Public Class frmMain
         'Errlog.csvファイルを作成 (Hakaru/ErrLog/errlog.csv) →各GWは別のログCSVファイルが有る
         'GW1 →　Errlog1.csv
         'GW2 →　Errlog2.csv
-        Dim GWNumber As Integer = GetSettingParameter(xmlFilePath, 0, 0, 0).GateWayNumber
+        Dim GWNumber As Integer = GetSettingParameter(strxmlFilePathGateway, 0, 0, 0).GateWayNumber
         For i As Integer = 1 To GWNumber
-            Dim csvfileLogPath As String = basePath1.ToString() & "Errlog_" & i & ".csv"
+            Dim csvfileLogPath As String = strbasePathErrLog.ToString() & "Errlog_" & i & ".csv"
             csvfileLogPathList.Add(csvfileLogPath)
         Next
         Try
@@ -189,6 +192,42 @@ Public Class frmMain
         Catch ex As Exception
             Console.WriteLine("エラー: " & ex.Message)
         End Try
+        'Queueを初期
+        timeQueue = New Queue(Of String)()
+        'Timerを初期, Interval: 1分 (60000ms)
+        timerForQueue = New System.Timers.Timer(60000)
+        AddHandler timerForQueue.Elapsed, AddressOf OnTimedEvent
+        timerForQueue.AutoReset = True
+        timerForQueue.Enabled = True
+        OnTimedEvent(Nothing, Nothing)
+        ListBox1.Items.Clear()
+
+        For Each item In timeQueue
+            ListBox1.Items.Add(item)
+        Next
+        '処理待ち数を更新
+        lblPendingNumber.Text = timeQueue.Count
+    End Sub
+#End Region
+
+#Region "クロックタイム表示"
+    Private Sub OnTimedEvent(source As Object, e As ElapsedEventArgs)
+        Dim dtTimeNow As DateTime = DateTime.Now
+        '時間が0分、10分、20分、30分、40分、50分かを確認
+        If dtTimeNow.Minute Mod 10 = 0 Then
+            '現在時刻より10分の遅延を設定
+            Dim dtTimeGW As DateTime = dtTimeNow.AddMinutes(-10)
+            '"YYYY/MM/DD hh:mm:00"フォーマットを設定
+            Dim dtTimeGWMod As String = dtTimeGW.ToString("yyyy/MM/dd HH:mm:00")
+            'Queueに追加
+            timeQueue.Enqueue(dtTimeGWMod)
+            ' Cập nhật ListBox từ luồng giao diện người dùng
+            Invoke(New Action(Sub()
+                                  ListBox1.Items.Add(dtTimeGWMod)
+                                  lblPendingNumber.Text = timeQueue.Count.ToString()
+                              End Sub))
+
+        End If
     End Sub
 #End Region
 
@@ -440,7 +479,7 @@ Public Class frmMain
 
                 writer.WriteLine(dataLine)
             End Using
-            'UploadFileToFtp(serverUri, userName, password, csvFilePathTemp, remoteDirectory)
+            'UploadFileToFtp(strServerIp, strUserName, strPassword, csvFilePathTemp, strRemoteDirectory)
         End If
     End Sub
 #End Region
@@ -510,22 +549,22 @@ Public Class frmMain
     '  None
     Private Sub UpdateSwitchGW()
         Dim xmlDoc As New XmlDocument()
-        xmlDoc.Load(xmlFilePath)
+        xmlDoc.Load(strxmlFilePathGateway)
         Dim GWSettingNode As XmlNode = xmlDoc.SelectSingleNode("/settings/GWSetting")
         If isSwitchOnGW Then
-            pbGWStatus.Image = Image.FromFile(switchONPath)
+            pbGWStatus.Image = Image.FromFile(strswitchONPath)
             lblGWStatus.Text = "ON"
             If GWSettingNode IsNot Nothing Then
                 GWSettingNode.InnerText = "1"
             End If
         Else
-            pbGWStatus.Image = Image.FromFile(switchOFFPath)
+            pbGWStatus.Image = Image.FromFile(strswitchOFFPath)
             lblGWStatus.Text = "OFF"
             If GWSettingNode IsNot Nothing Then
                 GWSettingNode.InnerText = "0"
             End If
         End If
-        xmlDoc.Save(xmlFilePath)
+        xmlDoc.Save(strxmlFilePathGateway)
     End Sub
 
     'ピクチャーボックスなどのコントロールの有効/無効を切り替える
@@ -535,22 +574,22 @@ Public Class frmMain
     '  None
     Private Sub UpdateSwitchSV()
         Dim xmlDoc As New XmlDocument()
-        xmlDoc.Load(xmlFilePath)
+        xmlDoc.Load(strxmlFilePathGateway)
         Dim serverSettingNode As XmlNode = xmlDoc.SelectSingleNode("/settings/ServerSetting")
         If isSwitchOnSV Then
-            pbServerStatus.Image = Image.FromFile(switchONPath)
+            pbServerStatus.Image = Image.FromFile(strswitchONPath)
             lblServerStatus.Text = "ON"
             If serverSettingNode IsNot Nothing Then
                 serverSettingNode.InnerText = "1"
             End If
         Else
-            pbServerStatus.Image = Image.FromFile(switchOFFPath)
+            pbServerStatus.Image = Image.FromFile(strswitchOFFPath)
             lblServerStatus.Text = "OFF"
             If serverSettingNode IsNot Nothing Then
                 serverSettingNode.InnerText = "0"
             End If
         End If
-        xmlDoc.Save(xmlFilePath)
+        xmlDoc.Save(strxmlFilePathGateway)
     End Sub
 #End Region
 
@@ -574,7 +613,7 @@ Public Class frmMain
         Console.WriteLine("unitIndex1 la: " & unitIndex1)
         Console.WriteLine("channelIndex1 la: " & channelIndex1)
         'IPアドレス
-        strBuf = GetSettingParameter(xmlFilePath, gwIndex1, unitIndex1, channelIndex1).IPAddress
+        strBuf = GetSettingParameter(strxmlFilePathGateway, gwIndex1, unitIndex1, channelIndex1).IPAddress
         blnRslt = funcChkIpAddr(strBuf)
         If blnRslt = False Then
             MessageBox.Show("IPアドレスの入力値が正しくありません", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error)
@@ -652,7 +691,7 @@ Public Class frmMain
         '以下はファンクションコードが03Hか04Hか17Hを選択しているときにチェックする
         If (intFuncBuf = &H17) Then
             'Read開始アドレス
-            strBuf = GetSettingParameter(xmlFilePath, gwIndex1, unitIndex1, channelIndex1).StartRegister
+            strBuf = GetSettingParameter(strxmlFilePathGateway, gwIndex1, unitIndex1, channelIndex1).StartRegister
             blnRslt = strBuf
             If blnRslt = False Then
                 MessageBox.Show("開始アドレスは10進数で0～10000の整数で入力してください", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error)
@@ -664,7 +703,7 @@ Public Class frmMain
                 Exit Function
             End If
             'Readレジスタ数
-            strBuf = GetSettingParameter(xmlFilePath, gwIndex1, unitIndex1, channelIndex1).RegisterNumber
+            strBuf = GetSettingParameter(strxmlFilePathGateway, gwIndex1, unitIndex1, channelIndex1).RegisterNumber
             blnRslt = strBuf
             If blnRslt = False Then
                 MessageBox.Show("レジスタ数は10進数で0～" & (REGI_ALL_MAX) & "の整数で入力してください", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error)
@@ -696,7 +735,7 @@ Public Class frmMain
         '以下はchkTimeWriteにチェックが入っている時のみ確認する。
         If gTimeWrite = True Then
             'LoRaアドレス
-            strBuf = GetSettingParameter(xmlFilePath, gwIndex1, unitIndex1, channelIndex1).LoRaAddress
+            strBuf = GetSettingParameter(strxmlFilePathGateway, gwIndex1, unitIndex1, channelIndex1).LoRaAddress
             blnRslt = strBuf
             If blnRslt = False Then
                 MessageBox.Show("LoRaアドレスは10進数の自然数で入力してください", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error)
@@ -704,7 +743,7 @@ Public Class frmMain
                 Exit Function
             End If
             'Modbusアドレス
-            strBuf = GetSettingParameter(xmlFilePath, gwIndex1, unitIndex1, channelIndex1).ModbusAddress
+            strBuf = GetSettingParameter(strxmlFilePathGateway, gwIndex1, unitIndex1, channelIndex1).ModbusAddress
             blnRslt = strBuf
             If blnRslt = False Then
                 MessageBox.Show("Modbusアドレスは10進数の自然数で入力してください", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error)
@@ -864,17 +903,17 @@ Public Class frmMain
         'テキストボックス_ユニットID
         gsttModbus.intModUnitId = CInt("&H" & "00")
         'テキストボックス_Read開始アドレス
-        gsttModbus.intModReadAddr = GetSettingParameter(xmlFilePath, gwIndex1, unitIndex1, channelIndex1).StartRegister
+        gsttModbus.intModReadAddr = GetSettingParameter(strxmlFilePathGateway, gwIndex1, unitIndex1, channelIndex1).StartRegister
         'テキストボックス_Readレジスタ数
-        gsttModbus.intModReadRegist = GetSettingParameter(xmlFilePath, gwIndex1, unitIndex1, channelIndex1).RegisterNumber
+        gsttModbus.intModReadRegist = GetSettingParameter(strxmlFilePathGateway, gwIndex1, unitIndex1, channelIndex1).RegisterNumber
         'テキストボックス_Write開始アドレス
         gsttModbus.intModWriteAddr = 1000
         'テキストボックス_Writeレジスタ数
         gsttModbus.intModWriteRegist = 8
         'テキストボックス_LoRaアドレス
-        gsttWriteData.intWDataLoRaAddr = GetSettingParameter(xmlFilePath, gwIndex1, unitIndex1, channelIndex1).LoRaAddress
+        gsttWriteData.intWDataLoRaAddr = GetSettingParameter(strxmlFilePathGateway, gwIndex1, unitIndex1, channelIndex1).LoRaAddress
         'テキストボックス_Modbusアドレス
-        gsttWriteData.intWDataModAddr = GetSettingParameter(xmlFilePath, gwIndex1, unitIndex1, channelIndex1).ModbusAddress
+        gsttWriteData.intWDataModAddr = GetSettingParameter(strxmlFilePathGateway, gwIndex1, unitIndex1, channelIndex1).ModbusAddress
         'ラジオボタン
         Dim intBuf As Integer = &H17
         gsttModbus.intModFunc = &H17
@@ -888,7 +927,7 @@ Public Class frmMain
         Dim gwIndex1 As Integer = gwIndex
         Dim unitIndex1 As Integer = unitIndex
         Dim channelIndex1 As Integer = channelIndex
-        Dim IPAddress As String = GetSettingParameter(xmlFilePath, gwIndex1, unitIndex1, channelIndex1).IPAddress
+        Dim IPAddress As String = GetSettingParameter(strxmlFilePathGateway, gwIndex1, unitIndex1, channelIndex1).IPAddress
         Dim Port As Integer = 502
         Dim Timeout As String = 100
         Dim Interval As String = 200
@@ -967,22 +1006,22 @@ Public Class frmMain
             '最後に改行を追加する
             Dim dataFilter As String = (strRcv).Substring(18)
             'ChannelNumberを取る
-            Dim channelNumber As Integer = GetSettingParameter(xmlFilePath, gwIndex1, unitIndex1, channelIndex1).ChannelNumber
+            Dim channelNumber As Integer = GetSettingParameter(strxmlFilePathGateway, gwIndex1, unitIndex1, channelIndex1).ChannelNumber
             Console.WriteLine("Channel Number is " & channelNumber)
             'データラインを作成
             Dim dataLine As String = CreateDataLine(channelNumber, dtmNow, dataFilter)
             '処理されているユニットの情報を取得
-            Dim gatewayNo As String = GetSettingParameter(xmlFilePath, gwIndex1, unitIndex1, channelIndex1).GateWayNo
-            Dim unitNo As String = GetSettingParameter(xmlFilePath, gwIndex1, unitIndex1, channelIndex1).UnitNo
-            Dim unitName As String = GetSettingParameter(xmlFilePath, gwIndex1, unitIndex1, channelIndex1).UnitName
-            Dim cycle As Integer = GetSettingParameter(xmlFilePath, gwIndex1, unitIndex1, channelIndex1).Cycle
+            Dim gatewayNo As String = GetSettingParameter(strxmlFilePathGateway, gwIndex1, unitIndex1, channelIndex1).GateWayNo
+            Dim unitNo As String = GetSettingParameter(strxmlFilePathGateway, gwIndex1, unitIndex1, channelIndex1).UnitNo
+            Dim unitName As String = GetSettingParameter(strxmlFilePathGateway, gwIndex1, unitIndex1, channelIndex1).UnitName
+            Dim cycle As Integer = GetSettingParameter(strxmlFilePathGateway, gwIndex1, unitIndex1, channelIndex1).Cycle
             '現在の時刻情報を取得
             Dim currentDate As DateTime = DateTime.Now
             Dim currentYear As String = currentDate.Year.ToString("0000")
             Dim currentMonth As String = currentDate.Month.ToString("00")
             Dim currentDay As String = currentDate.Day.ToString("00")
             'CSVファイルのディレクトリ構造を作成
-            Dim csvfilePath As String = basePath.ToString() & gatewayNo & "\" & unitNo & "\" & currentYear & "\" & currentMonth & "\" & unitName & "_" & currentYear & currentMonth & currentDay & ".csv"
+            Dim csvfilePath As String = strbasePathGateway.ToString() & gatewayNo & "\" & unitNo & "\" & currentYear & "\" & currentMonth & "\" & unitName & "_" & currentYear & currentMonth & currentDay & ".csv"
             'CSVファイルのヘッダーを初期
             Dim header As String = "送信時刻,時刻,"
             If Not File.Exists(csvfilePath) Then
@@ -993,9 +1032,9 @@ Public Class frmMain
                 'ヘッダーにチャンネルネームを追加
                 While (channelIndex1 <= channelNumber)
                     If (channelIndex1 < channelNumber) Then
-                        header = header + GetSettingParameter(xmlFilePath, gwIndex1, unitIndex1, channelIndex1).ChannelName + ","
+                        header = header + GetSettingParameter(strxmlFilePathGateway, gwIndex1, unitIndex1, channelIndex1).ChannelName + ","
                     Else
-                        header = header + GetSettingParameter(xmlFilePath, gwIndex1, unitIndex1, channelIndex1).ChannelName
+                        header = header + GetSettingParameter(strxmlFilePathGateway, gwIndex1, unitIndex1, channelIndex1).ChannelName
                     End If
                     channelIndex1 = channelIndex1 + 1
                 End While
@@ -1005,7 +1044,7 @@ Public Class frmMain
                 Using sw As New StreamWriter(csvfilePath, False, New UTF8Encoding(True))
                     'CSVにヘッダーを書く
                     sw.WriteLine(header)
-                    'UploadFileToFtp(serverUri, userName, password, csvfilePath, remoteDirectory)
+                    'UploadFileToFtp(strServerIp, strUserName, strPassword, csvfilePath, strRemoteDirectory)
                 End Using
             Else
                 'CSVファイルが存在している場合、そのCSVファイルを引き続き書き込む
@@ -1314,7 +1353,7 @@ Public Class frmMain
         Dim unitIndex1 As Integer = unitIndex
         Dim channelIndex1 As Integer = channelIndex
         '書き込むデータ_LoRaアドレス
-        intBuf = GetSettingParameter(xmlFilePath, gwIndex1, unitIndex1, channelIndex1).LoRaAddress
+        intBuf = GetSettingParameter(strxmlFilePathGateway, gwIndex1, unitIndex1, channelIndex1).LoRaAddress
         gbytSndData(6 + intLenBuf) = (intBuf And &HFF00) >> 8
         intLenBuf += 1
         gbytSndData(6 + intLenBuf) = intBuf And &HFF
@@ -1496,7 +1535,7 @@ Public Class frmMain
             currentPath &= "/" & folder
             Dim fullUri As String = serverUriTemp.TrimEnd("/"c) & currentPath
             Dim request As FtpWebRequest = DirectCast(WebRequest.Create(fullUri), FtpWebRequest)
-            request.Credentials = New NetworkCredential(userName, password)
+            request.Credentials = New NetworkCredential(strServerIp, strPassword)
             request.Method = WebRequestMethods.Ftp.MakeDirectory
             Try
                 Using response As FtpWebResponse = DirectCast(request.GetResponse(), FtpWebResponse)
@@ -1514,7 +1553,7 @@ Public Class frmMain
         Try
             Dim request As FtpWebRequest = DirectCast(WebRequest.Create(remotePath), FtpWebRequest)
             request.Method = WebRequestMethods.Ftp.UploadFile
-            request.Credentials = New NetworkCredential(userName, password)
+            request.Credentials = New NetworkCredential(strUserName, strRemoteDirectory)
             Dim fileContents As Byte() = File.ReadAllBytes(localFilePathTemp)
             request.ContentLength = fileContents.Length
             Using requestStream As Stream = request.GetRequestStream()
@@ -1531,7 +1570,7 @@ Public Class frmMain
 
 #Region "マルチスレッドを開始"
     Private Sub StartMultipleThreads()
-        Dim GWNumber As Integer = GetSettingParameter(xmlFilePath, 0, 0, 0).GateWayNumber
+        Dim GWNumber As Integer = GetSettingParameter(strxmlFilePathGateway, 0, 0, 0).GateWayNumber
         'CancellationTokenSourceを初期
         cancellationTokenSource = New CancellationTokenSource()
         '各変数（i）→1のGW
@@ -1558,8 +1597,8 @@ Public Class frmMain
         Dim GWIndex As Integer = currentValues._gwIndex
         Dim UNITIndex As Integer = currentValues._unitIndex
         Dim CHANNELIndex As Integer = currentValues._channelIndex
-        Dim UNITNumber As Integer = GetSettingParameter(xmlFilePath, GWIndex, UNITIndex, CHANNELIndex).UnitNumber
-        Dim IPADDRESS As String = GetSettingParameter(xmlFilePath, GWIndex, UNITIndex, CHANNELIndex).IPAddress
+        Dim UNITNumber As Integer = GetSettingParameter(strxmlFilePathGateway, GWIndex, UNITIndex, CHANNELIndex).UnitNumber
+        Dim IPADDRESS As String = GetSettingParameter(strxmlFilePathGateway, GWIndex, UNITIndex, CHANNELIndex).IPAddress
         Dim dtmNow As DateTime
         dtmNow = DateTime.Now
         'GW中の各ユニット処理
